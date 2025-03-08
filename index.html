@@ -14,6 +14,32 @@
 			a {
 				color: #2983ff;
 			}
+			
+			#debug-info {
+				position: absolute;
+				top: 60px;
+				left: 20px;
+				background-color: rgba(0, 0, 0, 0.7);
+				padding: 5px 10px;
+				border-radius: 5px;
+				font-size: 12px;
+				z-index: 100;
+				display: none;
+			}
+			
+			#toggle-mobile {
+				position: absolute;
+				top: 10px;
+				right: 120px;
+				background-color: rgba(0, 0, 0, 0.7);
+				color: white;
+				border: 1px solid #2983ff;
+				padding: 5px 10px;
+				border-radius: 5px;
+				font-size: 12px;
+				cursor: pointer;
+				z-index: 100;
+			}
 		</style>
 	</head>
 
@@ -47,6 +73,12 @@
 				</div>
 				<div id="fire-button">FIRE</div>
 			</div>
+			
+			<!-- Debug Info -->
+			<div id="debug-info">Mobile Controls: <span id="debug-status">Initializing...</span></div>
+			
+			<!-- Toggle Mobile Controls Button (for testing) -->
+			<button id="toggle-mobile">Toggle Mobile Controls</button>
 		</div>
 
 		<!-- Import maps polyfill -->
@@ -65,6 +97,24 @@
 
 		<!-- Game scripts -->
 		<script type="module" src="js/main.js"></script>
+		
+		<!-- Mobile Controls Toggle Script -->
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				const toggleButton = document.getElementById('toggle-mobile');
+				const mobileControls = document.getElementById('mobile-controls');
+				const debugInfo = document.getElementById('debug-info');
+				
+				if (toggleButton && mobileControls) {
+					toggleButton.addEventListener('click', function() {
+						const isVisible = mobileControls.style.display === 'block';
+						mobileControls.style.display = isVisible ? 'none' : 'block';
+						debugInfo.style.display = isVisible ? 'none' : 'block';
+						toggleButton.textContent = isVisible ? 'Show Mobile Controls' : 'Hide Mobile Controls';
+					});
+				}
+			});
+		</script>
 
 	</body>
 </html> 
