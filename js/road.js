@@ -10,7 +10,15 @@ export class Road {
         
         // Add circular boundary properties
         this.boundaryRadius = 1000; // Doubled from 500 to 1000
-        this.boundaryHeight = 10; // Height of the boundary wall
+        this.boundaryHeight = 25; // Increased height for better visibility
+        
+        // Optimization properties
+        this.visibleSectionAngle = Math.PI; // Increased to 180 degrees for better visibility
+        this.boundaryWall = null; // Will store the continuous boundary wall
+        this.boundaryEdge = null; // Will store the edge of the boundary
+        this.pillarInstances = null; // For instanced meshes
+        this.boundaryLights = []; // For boundary lights
+        this.visibleDistance = 1200; // Increased visible distance
         
         // Create materials
         this.createMaterials();
@@ -20,6 +28,9 @@ export class Road {
         
         // Create circular boundary and ground
         this.createCircularBoundary();
+        
+        // Enable backface culling for all materials
+        this.enableBackfaceCulling();
     }
     
     createMaterials() {
@@ -169,6 +180,13 @@ export class Road {
         return segment;
     }
     
+    enableBackfaceCulling() {
+        // Enable backface culling for all materials to improve performance
+        this.roadMaterial.side = THREE.FrontSide;
+        this.grassMaterial.side = THREE.FrontSide;
+        this.markingMaterial.side = THREE.FrontSide;
+    }
+    
     createCircularBoundary() {
         // Create a large circular ground plane
         const groundGeometry = new THREE.CircleGeometry(this.boundaryRadius, 64);
@@ -178,34 +196,53 @@ export class Road {
         ground.receiveShadow = true;
         this.scene.add(ground);
         
-        // Create a boundary wall
-        const wallGeometry = new THREE.CylinderGeometry(
-            this.boundaryRadius, // top radius
-            this.boundaryRadius + 5, // bottom radius slightly larger for a slope effect
-            this.boundaryHeight, // height
-            64, // radial segments
-            2, // height segments
-            true // open-ended
-        );
+        // Create boundary wall segments instead of a single large wall
+        this.createBoundaryWallSegments();
         
-        // Create a material for the boundary wall
+        // Create instanced pillars for better performance
+        this.createInstancedPillars();
+    }
+    
+    createBoundaryWallSegments() {
+        // Create the boundary in segments for dynamic loading
+        const segmentCount = 64; // Increased from 32 to 64 for smoother boundary
+        const segmentAngle = (Math.PI * 2) / segmentCount;
+        
+        // Create a material for the boundary wall - make it opaque
         const wallMaterial = new THREE.MeshStandardMaterial({
             color: 0x444444,
             roughness: 0.7,
             metalness: 0.3,
-            side: THREE.DoubleSide, // Render both sides
-            transparent: true,
-            opacity: 0.8 // Semi-transparent
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
         });
+        
+        // Create a single continuous wall using CylinderGeometry instead of individual segments
+        const wallGeometry = new THREE.CylinderGeometry(
+            this.boundaryRadius, // top radius
+            this.boundaryRadius + 10, // bottom radius slightly larger for a slope effect
+            this.boundaryHeight, // height
+            64, // radial segments - increased for smoother appearance
+            1, // height segments
+            true, // open-ended
+            0, // start angle
+            Math.PI * 2 // end angle - full circle
+        );
         
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
         wall.position.y = this.boundaryHeight / 2; // Position so bottom is at ground level
+        wall.castShadow = true;
+        wall.receiveShadow = true;
         this.scene.add(wall);
         
-        // Add a glowing edge at the top of the wall
+        // Store the wall for reference
+        this.boundaryWall = wall;
+        
+        // Create a glowing edge at the top of the wall
         const edgeGeometry = new THREE.TorusGeometry(
             this.boundaryRadius, // radius
-            0.5, // tube radius
+            1.0, // tube radius - increased for better visibility
             16, // radial segments
             64 // tubular segments
         );
@@ -213,7 +250,7 @@ export class Road {
         const edgeMaterial = new THREE.MeshStandardMaterial({
             color: 0x00aaff,
             emissive: 0x0088ff,
-            emissiveIntensity: 0.5,
+            emissiveIntensity: 0.8, // Increased for better visibility
             roughness: 0.3,
             metalness: 0.7
         });
@@ -221,40 +258,19 @@ export class Road {
         const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
         edge.rotation.x = Math.PI / 2;
         edge.position.y = this.boundaryHeight;
+        edge.castShadow = true;
         this.scene.add(edge);
         
-        // Add decorative elements around the boundary
-        this.addBoundaryDecorations();
-        
-        // Add a helper to visualize the boundary (optional)
-        const circlePoints = [];
-        const segments = 64;
-        for (let i = 0; i <= segments; i++) {
-            const theta = (i / segments) * Math.PI * 2;
-            circlePoints.push(new THREE.Vector3(
-                Math.cos(theta) * this.boundaryRadius,
-                0,
-                Math.sin(theta) * this.boundaryRadius
-            ));
-        }
-        
-        const boundaryGeometry = new THREE.BufferGeometry().setFromPoints(circlePoints);
-        const boundaryHelper = new THREE.Line(
-            boundaryGeometry,
-            new THREE.LineBasicMaterial({ color: 0x00aaff, linewidth: 2 })
-        );
-        boundaryHelper.rotation.x = -Math.PI / 2;
-        boundaryHelper.position.y = 0.1; // Slightly above ground
-        this.scene.add(boundaryHelper);
+        // Store the edge for reference
+        this.boundaryEdge = edge;
     }
     
-    // Add decorative elements around the boundary
-    addBoundaryDecorations() {
-        // Add some decorative pillars around the boundary
-        const pillarCount = 32; // Doubled from 16 to 32 for the larger boundary
-        const pillarHeight = 15;
-        const pillarRadius = 3;
-        const pillarDistance = this.boundaryRadius - 5;
+    createInstancedPillars() {
+        // Create instanced mesh for pillars (much more efficient than individual meshes)
+        const pillarCount = 32; // Number of pillars around the boundary
+        const pillarHeight = 25; // Increased height to match the taller wall
+        const pillarRadius = 5; // Increased radius for better visibility
+        const pillarDistance = this.boundaryRadius - 2; // Slightly inside the boundary wall
         
         // Create pillar geometry and material
         const pillarGeometry = new THREE.CylinderGeometry(
@@ -271,22 +287,62 @@ export class Road {
             metalness: 0.4
         });
         
-        // Create pillars around the boundary
+        // Create instanced mesh for pillars
+        this.pillarInstances = new THREE.InstancedMesh(
+            pillarGeometry,
+            pillarMaterial,
+            pillarCount
+        );
+        
+        this.pillarInstances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.pillarInstances.castShadow = true;
+        this.pillarInstances.receiveShadow = true;
+        
+        // Set up matrix for each instance
+        const dummy = new THREE.Object3D();
+        
         for (let i = 0; i < pillarCount; i++) {
             const angle = (i / pillarCount) * Math.PI * 2;
             const x = Math.cos(angle) * pillarDistance;
             const z = Math.sin(angle) * pillarDistance;
             
-            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-            pillar.position.set(x, pillarHeight / 2, z);
-            pillar.castShadow = true;
-            pillar.receiveShadow = true;
-            this.scene.add(pillar);
+            dummy.position.set(x, pillarHeight / 2, z);
+            dummy.updateMatrix();
             
-            // Add a light on top of each pillar
-            const light = new THREE.PointLight(0x00aaff, 0.8, 50);
+            this.pillarInstances.setMatrixAt(i, dummy.matrix);
+        }
+        
+        this.pillarInstances.instanceMatrix.needsUpdate = true;
+        this.scene.add(this.pillarInstances);
+        
+        // Create point lights (reduced number for performance)
+        this.createBoundaryLights(pillarCount, pillarDistance, pillarHeight);
+    }
+    
+    createBoundaryLights(pillarCount, pillarDistance, pillarHeight) {
+        // Create lights on top of every 4th pillar to reduce light count
+        const lightCount = Math.floor(pillarCount / 4);
+        
+        // Create an array to store the lights
+        this.boundaryLights = [];
+        
+        for (let i = 0; i < lightCount; i++) {
+            const pillarIndex = i * 4; // Every 4th pillar
+            const angle = (pillarIndex / pillarCount) * Math.PI * 2;
+            const x = Math.cos(angle) * pillarDistance;
+            const z = Math.sin(angle) * pillarDistance;
+            
+            const light = new THREE.PointLight(0x00aaff, 0.8, 100);
             light.position.set(x, pillarHeight + 1, z);
+            light.visible = false; // Start with lights off
             this.scene.add(light);
+            
+            // Store the light with its angle for dynamic loading
+            this.boundaryLights.push({
+                light: light,
+                angle: angle,
+                position: new THREE.Vector3(x, pillarHeight + 1, z)
+            });
         }
     }
     
@@ -298,6 +354,7 @@ export class Road {
         return distance < this.boundaryRadius - 5; // 5 units buffer
     }
     
+    // Update method to dynamically load boundary elements based on car position
     update(carPosition) {
         // Recycle road segments for infinite road effect
         for (let i = 0; i < this.segments.length; i++) {
@@ -324,6 +381,38 @@ export class Road {
                 // Mark segment as recycled
                 segment.wasRecycled = true;
             }
+        }
+        
+        // Update dynamic boundary elements based on car position and direction
+        this.updateDynamicBoundary(carPosition);
+    }
+    
+    updateDynamicBoundary(carPosition) {
+        // With a continuous wall, we don't need to update visibility of individual segments
+        // The wall is always visible, and Three.js's built-in frustum culling will handle it
+        
+        // We can still update the lights based on car position for performance
+        if (this.boundaryLights) {
+            // Calculate angle from center to car position
+            const carAngle = Math.atan2(carPosition.z, carPosition.x);
+            
+            // Update lights visibility
+            this.boundaryLights.forEach(lightData => {
+                // Calculate angle difference
+                let angleDiff = Math.abs(lightData.angle - carAngle);
+                angleDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
+                
+                // Calculate distance from car to light
+                const lightPos = lightData.position;
+                const distToLight = Math.sqrt(
+                    Math.pow(carPosition.x - lightPos.x, 2) + 
+                    Math.pow(carPosition.z - lightPos.z, 2)
+                );
+                
+                // Only show lights within the visible section angle and within visible distance
+                // Increased visible angle to 180 degrees for better lighting
+                lightData.light.visible = (angleDiff < Math.PI) && (distToLight < this.visibleDistance);
+            });
         }
     }
 }

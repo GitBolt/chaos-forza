@@ -170,6 +170,13 @@ export class Car {
                 // Reduce speed to prevent getting stuck at the boundary
                 this.speed *= 0.5;
             }
+            
+            // Update frustum culling - mark the car as needing update
+            // This ensures Three.js recalculates the bounding box for proper frustum culling
+            this.object.updateMatrixWorld(true);
+            if (this.model) {
+                this.model.updateMatrixWorld(true);
+            }
         }
     }
     

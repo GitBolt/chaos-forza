@@ -37,6 +37,14 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3; // Increased for better reflections
 // Enable output encoding for better color representation
 renderer.outputEncoding = THREE.sRGBEncoding;
+
+// Performance optimizations
+renderer.sortObjects = true; // Enable sorting for better rendering order
+renderer.autoClear = true; // Changed from false to true - let Three.js handle clearing
+
+// Create depth material for pre-pass (not using it for now as it might cause issues)
+// const depthMaterial = new THREE.MeshDepthMaterial();
+
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -210,11 +218,12 @@ function animate() {
     const warmthFactor = 0.5 + Math.sin(clock.elapsedTime * 0.1) * 0.05;
     sunsetGlow.color.setRGB(1.0, 0.4 + warmthFactor, 0.1 + warmthFactor * 0.5);
 
-    // Update additional lights to follow the car
+    // Update car and lights
     if (car) {
+        // Update lights to follow the car
         frontLight.position.z = car.object.position.z + 20;
         backLight.position.z = car.object.position.z - 20;
-
+        
         // Update car based on input
         car.update(delta, input.keys);
 
@@ -227,9 +236,25 @@ function animate() {
             car.object.position.y + 2, // Look much higher up
             car.object.position.z
         ));
+        
         // Update road segments based on car position
         road.update(car.object.position);
     }
 
+    // Standard rendering (disabled depth pre-pass for now)
     renderer.render(scene, camera);
 }
+
+// Render with depth pre-pass for better performance - disabled for now
+// function renderWithDepthPrePass() {
+//     // Clear both the color and depth buffers
+//     renderer.clear();
+// 
+//     // 1. Render depth only
+//     scene.overrideMaterial = depthMaterial;
+//     renderer.render(scene, camera);
+// 
+//     // 2. Render scene normally, using the depth information from the previous pass
+//     scene.overrideMaterial = null;
+//     renderer.render(scene, camera);
+// }
