@@ -15,12 +15,12 @@ export class Car {
         this.speed = 0;
         this.direction = new THREE.Vector3(0, 0, -1); // Forward direction
         this.maxForwardSpeed = 10;
-        this.maxReverseSpeed = 0.2;
+        this.maxReverseSpeed = 0.5;
         this.acceleration = 0.008;
         this.deceleration = 0.005;
         this.brakeForce = 0.03;
-        this.turnSpeed = 0.06;
-        this.turnSpeedDecay = 0.1; // Turn less at lower speeds
+        this.turnSpeed = 0.04;
+        this.turnSpeedDecay = 0.2; // Turn less at lower speeds
         
         // Car state
         this.isAccelerating = false;
