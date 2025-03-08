@@ -58,13 +58,23 @@ function loadTextureWithCache(path) {
 
 // Function to optimize textures based on device capability
 function optimizeTexture(texture, isLowQuality = false) {
-    // Only apply low quality settings to mobile devices
-    if (isLowQuality && isMobile) {
-        texture.minFilter = THREE.NearestFilter;
-        texture.magFilter = THREE.NearestFilter;
-        texture.generateMipmaps = false;
-        texture.anisotropy = 1;
+    // Only apply optimizations to mobile devices
+    if (isMobile) {
+        if (isLowEndMobile) {
+            // More aggressive optimization for low-end mobile
+            texture.generateMipmaps = true;
+            texture.minFilter = THREE.LinearMipmapNearestFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = 1;
+        } else {
+            // Moderate optimization for regular mobile
+            texture.generateMipmaps = true;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = 2;
+        }
     } else {
+        // Full quality for desktop
         texture.minFilter = THREE.LinearMipmapLinearFilter;
         texture.magFilter = THREE.LinearFilter;
         texture.generateMipmaps = true;
@@ -276,23 +286,26 @@ document.addEventListener('DOMContentLoaded', () => {
 const clock = new THREE.Clock();
 const container = document.getElementById('container');
 
+// Use the existing isLowEndMobile variable defined earlier
+
 const renderer = new THREE.WebGLRenderer({
-    antialias: !isMobile, // Only disable on mobile
+    antialias: !isLowEndMobile, // Only disable on low-end mobile
     powerPreference: "high-performance",
-    precision: isMobile ? "mediump" : "highp", // Lower precision only on mobile
+    precision: isMobile ? "mediump" : "highp", // Use medium precision on mobile for balance
     stencil: false, // Disable stencil buffer if not needed
     depth: true
 });
-renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
+// Moderately reduce pixel ratio on mobile for better performance
+renderer.setPixelRatio(isMobile ? (isLowEndMobile ? 0.75 : Math.min(window.devicePixelRatio, 1)) : window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-// Enable shadows - only reduce quality on mobile
+// Enable shadows with reduced quality on mobile
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
-// Enable physically correct lighting
+// Enable physically correct lighting with reduced quality on mobile
 renderer.physicallyCorrectLights = true;
-// Enable tone mapping for better HDR visibility
+// Use better tone mapping on mobile
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.4; // Even lower exposure to see HDR sky details better
+renderer.toneMappingExposure = isMobile ? 0.6 : 0.4; // Slightly higher exposure for mobile
 // Enable output encoding for better color representation
 renderer.outputEncoding = THREE.sRGBEncoding;
 

@@ -3,6 +3,8 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
 // Device detection for performance optimization
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+// Additional check for low-end mobile devices
+const isLowEndMobile = isMobile && (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
 
 export class SkyDome {
     constructor(scene) {
@@ -55,44 +57,54 @@ export class SkyDome {
     }
     
     loadLowQualitySky() {
-        console.log("Loading optimized sky for mobile device");
+        console.log("Loading lightweight HDR sky for mobile device");
         
-        // Create a simple cube texture loader (much lighter than EXR)
-        const cubeTextureLoader = new THREE.CubeTextureLoader();
-        
-        // Load a simple cubemap (you may need to create these simpler textures)
-        // For now, we'll use a simple color for the background
-        const simpleSkyColor = new THREE.Color(0x87CEEB); // Sky blue
-        this.scene.background = simpleSkyColor;
-        
-        // Create a simple environment map for reflections
-        const envMapTexture = cubeTextureLoader.load([
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posz.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negz.jpg'
-        ]);
-        
-        // Set the environment map for the scene
-        this.scene.environment = envMapTexture;
-        this.envMap = envMapTexture;
-        
-        // Update materials with lower intensity for better performance
+        // Use the lightweight sky_phone.exr for mobile devices
+        const exrLoader = new EXRLoader();
+        exrLoader.load('textures/sky_phone.exr', (texture) => {
+            // Configure texture for environment mapping
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.needsUpdate = true;
+            
+            // Apply mobile optimizations to the texture
+            if (isLowEndMobile) {
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.generateMipmaps = false;
+            } else {
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.generateMipmaps = true;
+            }
+            
+            // Set renderer environment map
+            this.scene.environment = texture;
+            this.envMap = texture;
+            
+            // Set scene background to HDR texture
+            this.scene.background = texture;
+            
+            // Apply to materials with appropriate intensity based on device capability
+            const envMapIntensity = isLowEndMobile ? 0.5 : 0.8;
+            this.applyMinimalEnvMap(texture, envMapIntensity);
+        });
+    }
+    
+    // Helper method to apply environment map with minimal settings
+    applyMinimalEnvMap(envMap, intensity) {
         this.scene.traverse((object) => {
             if (object.isMesh && object.material) {
                 if (Array.isArray(object.material)) {
                     object.material.forEach(material => {
                         if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-                            material.envMap = envMapTexture;
-                            material.envMapIntensity = 0.5; // Lower intensity for performance
+                            material.envMap = envMap;
+                            material.envMapIntensity = intensity;
                             material.needsUpdate = true;
                         }
                     });
                 } else if (object.material.isMeshStandardMaterial || object.material.isMeshPhysicalMaterial) {
-                    object.material.envMap = envMapTexture;
-                    object.material.envMapIntensity = 0.5; // Lower intensity for performance
+                    object.material.envMap = envMap;
+                    object.material.envMapIntensity = intensity;
                     object.material.needsUpdate = true;
                 }
             }

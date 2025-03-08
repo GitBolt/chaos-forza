@@ -41,6 +41,10 @@ export class Road {
     }
     
     createMaterials() {
+        // Device detection for performance optimization
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isLowEndMobile = isMobile && (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+        
         // Create texture loader
         const textureLoader = new THREE.TextureLoader();
         
@@ -49,6 +53,15 @@ export class Road {
         this.diffuseMap.wrapS = THREE.RepeatWrapping;
         this.diffuseMap.wrapT = THREE.RepeatWrapping;
         this.diffuseMap.repeat.set(2, 10);
+        
+        // Apply moderate texture optimizations for mobile
+        if (isMobile) {
+            // Reduce texture quality for mobile but keep it decent
+            this.diffuseMap.generateMipmaps = true;
+            this.diffuseMap.minFilter = THREE.LinearMipmapLinearFilter;
+            this.diffuseMap.magFilter = THREE.LinearFilter;
+            this.diffuseMap.anisotropy = isLowEndMobile ? 1 : 2;
+        }
         
         // Load normal map for asphalt - use a more subtle normal map
         this.normalMap = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/brick_bump.jpg');
@@ -62,32 +75,58 @@ export class Road {
         this.roughnessMap.wrapT = THREE.RepeatWrapping;
         this.roughnessMap.repeat.set(8, 30);
         
-        // Create environment map for reflections
-        const cubeTextureLoader = new THREE.CubeTextureLoader();
-        this.envMap = cubeTextureLoader.load([
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posz.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negz.jpg'
-        ]);
+        if (isMobile) {
+            // Moderate texture optimization for mobile
+            this.normalMap.generateMipmaps = true;
+            this.normalMap.minFilter = THREE.LinearMipmapLinearFilter;
+            this.normalMap.magFilter = THREE.LinearFilter;
+            this.normalMap.anisotropy = isLowEndMobile ? 1 : 2;
+            
+            this.roughnessMap.generateMipmaps = true;
+            this.roughnessMap.minFilter = THREE.LinearMipmapLinearFilter;
+            this.roughnessMap.magFilter = THREE.LinearFilter;
+            this.roughnessMap.anisotropy = isLowEndMobile ? 1 : 2;
+        }
         
-        // Create reflective asphalt material using MeshPhysicalMaterial for better reflections
-        this.roadMaterial = new THREE.MeshPhysicalMaterial({ 
-            map: this.diffuseMap,
-            color: 0x222222,           // Darker color for asphalt
-            normalMap: this.normalMap,
-            normalScale: new THREE.Vector2(0.3, 0.3), // Reduced normal map intensity
-            roughnessMap: this.roughnessMap,
-            roughness: 0.5,            // Medium roughness for balanced reflections
-            metalness: 0.2,            // Slight metalness for reflections
-            envMap: this.envMap,
-            envMapIntensity: 0.8,      // Increased reflection intensity
-            clearcoat: 0.2,            // Slight clearcoat for reflective surface
-            clearcoatRoughness: 0.4,   // Medium clearcoat roughness for realistic look
-            reflectivity: 0.5,         // Medium reflectivity
-        });
+        // Create road material based on device capability
+        if (isLowEndMobile) {
+            // Simplified material for low-end mobile but still with normal map
+            this.roadMaterial = new THREE.MeshStandardMaterial({ 
+                map: this.diffuseMap,
+                color: 0x222222,           // Darker color for asphalt
+                normalMap: this.normalMap,
+                normalScale: new THREE.Vector2(0.2, 0.2), // Moderate normal map intensity
+                roughness: 0.6,            // Medium roughness
+                metalness: 0.1,            // Low metalness for less calculations
+            });
+        } else if (isMobile) {
+            // Better quality material for mobile
+            this.roadMaterial = new THREE.MeshStandardMaterial({ 
+                map: this.diffuseMap,
+                color: 0x222222,           // Darker color for asphalt
+                normalMap: this.normalMap,
+                normalScale: new THREE.Vector2(0.2, 0.2), // Moderate normal map intensity
+                roughnessMap: this.roughnessMap,
+                roughness: 0.5,            // Medium roughness
+                metalness: 0.2,            // Slight metalness for reflections
+                envMapIntensity: 0.4,      // Reduced reflection intensity for mobile
+            });
+        } else {
+            // Full quality material for desktop
+            this.roadMaterial = new THREE.MeshPhysicalMaterial({ 
+                map: this.diffuseMap,
+                color: 0x222222,           // Darker color for asphalt
+                normalMap: this.normalMap,
+                normalScale: new THREE.Vector2(0.3, 0.3), // Reduced normal map intensity
+                roughnessMap: this.roughnessMap,
+                roughness: 0.5,            // Medium roughness for balanced reflections
+                metalness: 0.2,            // Slight metalness for reflections
+                envMapIntensity: 0.8,      // Increased reflection intensity
+                clearcoat: 0.2,            // Slight clearcoat for reflective surface
+                clearcoatRoughness: 0.4,   // Medium clearcoat roughness for realistic look
+                reflectivity: 0.5,         // Medium reflectivity
+            });
+        }
         
         // Load ground texture
         const groundTexture = textureLoader.load('textures/ground.jpg');
@@ -97,28 +136,53 @@ export class Road {
         // Increase repeat to avoid stretching and blurriness at a distance
         groundTexture.repeat.set(8, 8);
         
-        // Improve texture quality at different distances
-        groundTexture.minFilter = THREE.LinearMipMapLinearFilter;
-        groundTexture.magFilter = THREE.LinearFilter;
+        // Apply moderate texture optimizations for mobile
+        if (isMobile) {
+            // Reduce texture quality for mobile but keep it decent
+            groundTexture.generateMipmaps = true;
+            groundTexture.minFilter = THREE.LinearMipmapLinearFilter;
+            groundTexture.magFilter = THREE.LinearFilter;
+            groundTexture.anisotropy = isLowEndMobile ? 1 : 4;
+        } else {
+            // Improve texture quality at different distances for desktop
+            groundTexture.minFilter = THREE.LinearMipmapLinearFilter;
+            groundTexture.magFilter = THREE.LinearFilter;
+            // Add anisotropic filtering to improve texture quality at oblique angles
+            groundTexture.anisotropy = 16;
+        }
         
-        // Add anisotropic filtering to improve texture quality at oblique angles
-        groundTexture.anisotropy = 16;
+        // Create grass material with ground.jpg texture - simplified for mobile
+        if (isLowEndMobile) {
+            this.grassMaterial = new THREE.MeshStandardMaterial({ 
+                map: groundTexture,
+                color: 0xffffff,  // Use white color to show the texture as is
+                roughness: 0.8,
+                metalness: 0.0
+            });
+        } else {
+            this.grassMaterial = new THREE.MeshStandardMaterial({ 
+                map: groundTexture,
+                color: 0xffffff,  // Use white color to show the texture as is
+                roughness: 0.8,
+                metalness: 0.0
+            });
+        }
         
-        // Create grass material with ground.jpg texture
-        this.grassMaterial = new THREE.MeshStandardMaterial({ 
-            map: groundTexture,
-            color: 0xffffff,  // Use white color to show the texture as is
-            roughness: 0.8,
-            metalness: 0.0
-        });
-        
-        // Create road marking material
-        this.markingMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xffffff,
-            roughness: 0.3,
-            metalness: 0.0,
-            emissive: 0x333333
-        });
+        // Create road marking material - simplified for mobile
+        if (isLowEndMobile) {
+            this.markingMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                roughness: 0.3,
+                metalness: 0.0,
+            });
+        } else {
+            this.markingMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                roughness: 0.3,
+                metalness: 0.0,
+                emissive: 0x333333
+            });
+        }
     }
     
     createRoadSegments() {
