@@ -14,7 +14,7 @@ export class Car {
         // Physics properties
         this.speed = 0;
         this.direction = new THREE.Vector3(0, 0, -1); // Forward direction
-        this.maxForwardSpeed = 6;
+        this.maxForwardSpeed = 4;
         this.maxReverseSpeed = 0.5;
         this.acceleration = 0.008;
         this.deceleration = 0.005;
@@ -32,6 +32,19 @@ export class Car {
         // Boundary check
         this.boundaryRadius = 995; // Updated to match the doubled road boundary (1000 - 5)
         this.lastValidPosition = new THREE.Vector3();
+        
+        // Bump physics properties - increased values for more noticeable effects
+        this.verticalVelocity = 0;
+        this.verticalPosition = 0;
+        this.isOnGround = true;
+        this.gravity = 0.03; // Increased gravity
+        this.bumpForce = 0.8; // Significantly increased bump force
+        this.suspensionStiffness = 0.1; // Increased stiffness
+        this.suspensionDamping = 0.08; // Increased damping
+        this.wheelbase = 2; // Distance between front and rear wheels
+        this.pitchAngle = 0;
+        this.pitchVelocity = 0;
+        this.pitchDamping = 0.08; // Slightly reduced for more oscillation
     }
     
     applyShinyMaterials() {
@@ -70,7 +83,7 @@ export class Car {
         });
     }
     
-    update(delta, keys) {
+    update(delta, keys, road) {
         // Reset state
         this.isAccelerating = false;
         this.isBraking = false;
@@ -104,8 +117,22 @@ export class Car {
         // Apply physics
         this.applyPhysics(delta);
         
-        // Update position and rotation
+        // Apply bump physics if road is provided
+        if (road) {
+            this.applyBumpPhysics(delta, road);
+        }
+        
+        // Update movement
         this.updateMovement();
+        
+        // Store last valid position if within boundary
+        if (this.isWithinBoundary(this.object.position)) {
+            this.lastValidPosition.copy(this.object.position);
+        } else {
+            // Reset to last valid position if out of bounds
+            this.object.position.copy(this.lastValidPosition);
+        }
+        
     }
     
     applyPhysics(delta) {
@@ -170,13 +197,6 @@ export class Car {
                 // Reduce speed to prevent getting stuck at the boundary
                 this.speed *= 0.5;
             }
-            
-            // Update frustum culling - mark the car as needing update
-            // This ensures Three.js recalculates the bounding box for proper frustum culling
-            this.object.updateMatrixWorld(true);
-            if (this.model) {
-                this.model.updateMatrixWorld(true);
-            }
         }
     }
     
@@ -186,5 +206,101 @@ export class Car {
         const distance = Math.sqrt(position.x * position.x + position.z * position.z);
         // Return true if within boundary, false otherwise
         return distance < this.boundaryRadius;
+    }
+    
+    // Add a new method for bump physics
+    applyBumpPhysics(delta, road) {
+        // Get current position
+        const position = this.object.position.clone();
+        
+        // Check if we're on a bump
+        const bump = road.getBumpAtPosition(position);
+        
+        if (bump) {
+            // Apply vertical force based on bump height and car speed
+            const bumpForce = bump.height * this.bumpForce * Math.abs(this.speed);
+            this.verticalVelocity += bumpForce;
+            
+            // Apply pitch based on bump normal and car speed
+            const pitchForce = bump.height * this.bumpForce * 0.5 * Math.abs(this.speed) * 
+                (this.speed > 0 ? 1 : -1); // Reverse pitch direction when going backwards
+            this.pitchVelocity += pitchForce;
+            
+            // Reduce speed when on bumps
+            this.speed *= (1 - bump.height * 0.3); // Increased slowdown effect
+            
+            // Debug output to console
+            console.log("Hit bump! Height:", bump.height, "Force:", bumpForce);
+        }
+        
+        // Apply gravity
+        if (this.verticalPosition > 0 || this.verticalVelocity > 0) {
+            this.verticalVelocity -= this.gravity;
+        }
+        
+        // Update vertical position
+        this.verticalPosition += this.verticalVelocity;
+        
+        // Ground check
+        if (this.verticalPosition < 0) {
+            this.verticalPosition = 0;
+            
+            // Apply suspension when hitting the ground
+            if (this.verticalVelocity < 0) {
+                // Bounce with damping
+                this.verticalVelocity = -this.verticalVelocity * 0.4; // Increased bounce
+                
+                // If velocity is very small, stop bouncing
+                if (Math.abs(this.verticalVelocity) < 0.01) {
+                    this.verticalVelocity = 0;
+                }
+            }
+        }
+        
+        // Apply suspension forces when on ground
+        if (this.verticalPosition === 0) {
+            // Suspension force tries to keep car at rest height
+            const suspensionForce = -this.verticalPosition * this.suspensionStiffness;
+            // Damping force opposes velocity
+            const dampingForce = -this.verticalVelocity * this.suspensionDamping;
+            
+            this.verticalVelocity += suspensionForce + dampingForce;
+        }
+        
+        // Update pitch angle
+        this.pitchAngle += this.pitchVelocity;
+        
+        // Apply damping to pitch
+        this.pitchVelocity *= (1 - this.pitchDamping);
+        this.pitchAngle *= (1 - this.pitchDamping * 0.5);
+        
+        // Apply vertical position to the entire car object
+        this.object.position.y = this.verticalPosition;
+        
+        // Only apply pitch rotation when the car is in the air
+        if (this.verticalPosition > 0) {
+            // Create a matrix to combine pitch with the car's current orientation
+            // This is the most reliable way to apply pitch while preserving the car's yaw
+            
+            // Create a rotation matrix for the pitch
+            const pitchMatrix = new THREE.Matrix4().makeRotationX(this.pitchAngle);
+            
+            // Get the car's current rotation matrix (preserves yaw)
+            const carRotationMatrix = new THREE.Matrix4().makeRotationY(this.object.rotation.y);
+            
+            // Combine the rotations
+            const combinedRotation = new THREE.Matrix4().multiplyMatrices(carRotationMatrix, pitchMatrix);
+            
+            // Apply the combined rotation to the model
+            this.model.rotation.setFromRotationMatrix(combinedRotation);
+        } else {
+            // When on ground, reset to normal orientation (only yaw)
+            this.model.rotation.set(0,0,0);
+        }
+        
+        // Debug output
+        if (this.verticalPosition > 0.05 || Math.abs(this.pitchAngle) > 0.05) {
+            console.log("Car Y:", this.verticalPosition, "Pitch:", this.pitchAngle);
+        }
     }
 } 

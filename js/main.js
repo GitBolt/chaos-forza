@@ -225,7 +225,7 @@ function animate() {
         backLight.position.z = car.object.position.z - 20;
         
         // Update car based on input
-        car.update(delta, input.keys);
+        car.update(delta, input.keys, road);
 
         // Update camera to follow car
         cameraTarget.position.copy(car.object.position);
