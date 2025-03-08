@@ -10,7 +10,7 @@ export class Rocket {
         this.acceleration = 3; // Increased acceleration
         this.active = false;
         this.distanceTraveled = 0; // Track distance traveled
-        this.explosionRange = 10; // Distance after which rocket will explode
+        this.explosionRange = 25; // Distance after which rocket will explode
         this.exploded = false;
         this.explosionComplete = false; // Track when explosion animation is complete
 

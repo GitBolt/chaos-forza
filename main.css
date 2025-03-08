@@ -113,9 +113,14 @@ a, button, input, select {
 	left: 20px;
 	font-size: 24px;
 	font-weight: bold;
-	color: #ff6600;
-	text-shadow: 0 0 10px rgba(255, 102, 0, 0.7);
+	color: #ffffff;
+	text-shadow: 0 0 10px rgba(41, 131, 255, 0.9), 0 0 20px rgba(41, 131, 255, 0.7);
 	letter-spacing: 2px;
+	background-color: rgba(0, 0, 0, 0.6);
+	padding: 8px 15px;
+	border-radius: 5px;
+	border-left: 4px solid #2983ff;
+	box-shadow: 0 0 15px rgba(41, 131, 255, 0.5);
 }
 
 /* Kill Counter */
@@ -126,15 +131,18 @@ a, button, input, select {
 	font-size: 18px;
 	font-weight: bold;
 	color: #fff;
-	background-color: rgba(0, 0, 0, 0.5);
+	background-color: rgba(0, 0, 0, 0.7);
 	padding: 10px 15px;
 	border-radius: 5px;
-	border: 1px solid #ff6600;
+	border: 1px solid #2983ff;
+	box-shadow: 0 0 15px rgba(41, 131, 255, 0.5);
 }
 
 #kill-count {
-	color: #ff6600;
+	color: #2983ff;
 	font-size: 24px;
+	text-shadow: 0 0 8px rgba(41, 131, 255, 0.8);
+	transition: transform 0.2s ease-out;
 }
 
 /* Kill Notification */
@@ -145,10 +153,15 @@ a, button, input, select {
 	transform: translate(-50%, -50%);
 	font-size: 28px;
 	font-weight: bold;
-	color: #ff6600;
-	text-shadow: 0 0 15px rgba(255, 102, 0, 0.9);
+	color: #ffffff;
+	text-shadow: 0 0 15px rgba(41, 131, 255, 0.9), 0 0 25px rgba(41, 131, 255, 0.7);
 	opacity: 0;
 	transition: opacity 0.3s, transform 0.3s;
+	background-color: rgba(0, 0, 0, 0.7);
+	padding: 10px 20px;
+	border-radius: 8px;
+	border: 2px solid #2983ff;
+	box-shadow: 0 0 30px rgba(41, 131, 255, 0.6);
 }
 
 #kill-notification.show {
@@ -161,16 +174,79 @@ a, button, input, select {
 	position: absolute;
 	bottom: 20px;
 	right: 20px;
-	background-color: rgba(0, 0, 0, 0.5);
+	background-color: rgba(0, 0, 0, 0.7);
 	padding: 10px;
 	border-radius: 5px;
-	border: 1px solid #ff6600;
+	border: 1px solid #2983ff;
+	box-shadow: 0 0 15px rgba(41, 131, 255, 0.5);
 }
 
 .control-item {
 	margin: 5px 0;
 	font-size: 14px;
 	color: #fff;
+	text-shadow: 0 0 5px rgba(41, 131, 255, 0.5);
+}
+
+/* Mobile Controls */
+#mobile-controls {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	height: 200px;
+	pointer-events: auto;
+	display: none; /* Hidden by default, shown on mobile */
+}
+
+#joystick-area {
+	position: absolute;
+	bottom: 20px;
+	left: 20px;
+	width: 150px;
+	height: 150px;
+	background-color: rgba(0, 0, 0, 0.5);
+	border-radius: 50%;
+	border: 2px solid rgba(41, 131, 255, 0.7);
+	box-shadow: 0 0 20px rgba(41, 131, 255, 0.5);
+}
+
+#joystick {
+	position: absolute;
+	width: 60px;
+	height: 60px;
+	background: radial-gradient(circle at center, #2983ff 0%, #1a5bb0 70%, #0d3b7a 100%);
+	border-radius: 50%;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	box-shadow: 0 0 15px rgba(41, 131, 255, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.5);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+#fire-button {
+	position: absolute;
+	bottom: 50px;
+	right: 50px;
+	width: 80px;
+	height: 80px;
+	background: radial-gradient(circle at center, #ff5050 0%, #cc0000 70%, #990000 100%);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: bold;
+	color: white;
+	box-shadow: 0 0 20px rgba(255, 50, 50, 0.7), inset 0 0 10px rgba(255, 255, 255, 0.3);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+	font-size: 18px;
+}
+
+#fire-button:active {
+	background: radial-gradient(circle at center, #cc0000 0%, #990000 70%, #660000 100%);
+	transform: scale(0.95);
+	box-shadow: 0 0 10px rgba(255, 50, 50, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.2);
 }
 
 /* Responsive adjustments */
@@ -193,5 +269,13 @@ a, button, input, select {
 	
 	.control-item {
 		font-size: 12px;
+	}
+	
+	#controls-guide {
+		display: none; /* Hide keyboard controls on mobile */
+	}
+	
+	#mobile-controls {
+		display: block; /* Show mobile controls */
 	}
 } 

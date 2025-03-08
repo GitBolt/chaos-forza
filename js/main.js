@@ -95,6 +95,17 @@ function updateCarSound(speed, isAccelerating, isBraking) {
 document.addEventListener('DOMContentLoaded', () => {
     killCountElement = document.getElementById('kill-count');
     killNotificationElement = document.getElementById('kill-notification');
+    
+    // Add animation style
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1.2); }
+            50% { transform: translate(-50%, -50%) scale(1.3); }
+            100% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+    `;
+    document.head.appendChild(style);
 });
 
 // Three.js setup
@@ -493,6 +504,12 @@ function updateKillCount() {
         // Update kill count display if element exists
         if (killCountElement) {
             killCountElement.textContent = killCount;
+            
+            // Add a quick scale animation to the kill count
+            killCountElement.style.transform = 'scale(1.3)';
+            setTimeout(() => {
+                killCountElement.style.transform = 'scale(1)';
+            }, 200);
         }
         
         // Check for kill streak
@@ -518,19 +535,23 @@ function updateKillCount() {
         
         // Display notification if element exists
         if (killNotificationElement) {
+            // Set the notification text
             killNotificationElement.textContent = message;
+            
+            // Add the show class to make it visible
             killNotificationElement.classList.add('show');
+            
+            // Add a pulse animation effect
+            killNotificationElement.style.animation = 'none';
+            setTimeout(() => {
+                killNotificationElement.style.animation = 'pulse 0.5s 3';
+            }, 10);
             
             // Hide notification after a delay
             setTimeout(() => {
-                if (killNotificationElement) {
-                    killNotificationElement.classList.remove('show');
-                }
+                killNotificationElement.classList.remove('show');
             }, 2000);
         }
-        
-        // Log to console as fallback
-        console.log(`Kill count: ${killCount} - ${message}`);
     } catch (error) {
         console.error('Error updating kill count:', error);
     }
