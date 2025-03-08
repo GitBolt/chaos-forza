@@ -5,16 +5,22 @@ export class Car {
         this.object = object;
         this.model = model;
         
+        // Fix car orientation - rotate the model 180 degrees to face forward
+        // this.model.rotation.y = Math.PI;
+        
+        // Make the car shiny by updating its materials
+        this.applyShinyMaterials();
+        
         // Physics properties
         this.speed = 0;
         this.direction = new THREE.Vector3(0, 0, -1); // Forward direction
-        this.maxForwardSpeed = 0.5;
+        this.maxForwardSpeed = 10;
         this.maxReverseSpeed = 0.2;
-        this.acceleration = 0.01;
+        this.acceleration = 0.008;
         this.deceleration = 0.005;
         this.brakeForce = 0.03;
-        this.turnSpeed = 0.03;
-        this.turnSpeedDecay = 0.7; // Turn less at lower speeds
+        this.turnSpeed = 0.06;
+        this.turnSpeedDecay = 0.1; // Turn less at lower speeds
         
         // Car state
         this.isAccelerating = false;
@@ -22,6 +28,42 @@ export class Car {
         this.isReversing = false;
         this.isTurningLeft = false;
         this.isTurningRight = false;
+    }
+    
+    applyShinyMaterials() {
+        // Create environment map for reflections
+        const cubeTextureLoader = new THREE.CubeTextureLoader();
+        const envMap = cubeTextureLoader.load([
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posx.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negx.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posy.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negy.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posz.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negz.jpg'
+        ]);
+        
+        // Apply shiny materials to the car
+        this.model.traverse((child) => {
+            if (child.isMesh) {
+                // Create a copy of the original material to preserve textures
+                const originalMaterial = child.material;
+                
+                // Create a new physical material
+                const shinyMaterial = new THREE.MeshPhysicalMaterial({
+                    map: originalMaterial.map,
+                    color: originalMaterial.color || new THREE.Color(0x888888),
+                    metalness: 0.8,           // High metalness for car paint
+                    roughness: 0.2,           // Low roughness for shiny look
+                    clearcoat: 0.5,           // Add clearcoat for car paint effect
+                    clearcoatRoughness: 0.1,  // Smooth clearcoat
+                    envMap: envMap,           // Environment map for reflections
+                    envMapIntensity: 1.0      // Reflection intensity
+                });
+                
+                // Apply the new material
+                child.material = shinyMaterial;
+            }
+        });
     }
     
     update(delta, keys) {
