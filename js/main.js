@@ -525,9 +525,12 @@ function animate() {
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(car.object.quaternion);
         
+        // Check if car is in the air (verticalPosition > 0)
+        const isCarInAir = car.verticalPosition > 0;
+        
         // Create a new rocket and launch it
         const newRocket = new Rocket(scene, null); // No need to pass soundManager
-        newRocket.launch(position, direction, car.speed);
+        newRocket.launch(position, direction, car.speed, isCarInAir);
         rockets.push(newRocket);
         
         // Play rocket sound

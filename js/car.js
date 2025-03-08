@@ -22,8 +22,8 @@ export class Car {
         this.acceleration = 0.008;
         this.deceleration = 0.005;
         this.brakeForce = 0.03;
-        this.turnSpeed = 0.04;
-        this.turnSpeedDecay = 0.2; // Turn less at lower speeds
+        this.turnSpeed = 0.02;
+        this.turnSpeedDecay = 0.1; // Turn less at lower speeds
         
         // Car state
         this.isAccelerating = false;
@@ -40,8 +40,8 @@ export class Car {
         this.verticalVelocity = 0;
         this.verticalPosition = 0;
         this.isOnGround = true;
-        this.gravity = 0.03; // Increased gravity
-        this.bumpForce = 0.8; // Significantly increased bump force
+        this.gravity = 0.02; // Increased gravity
+        this.bumpForce = 0.9; // Significantly increased bump force
         this.suspensionStiffness = 0.1; // Increased stiffness
         this.suspensionDamping = 0.08; // Increased damping
         this.wheelbase = 2; // Distance between front and rear wheels

@@ -83,7 +83,7 @@ export class Rocket {
         this.nose.castShadow = true;
     }
 
-    launch(position, direction, carSpeed = 0) {
+    launch(position, direction, carSpeed = 0, isCarInAir = false) {
         // Reset rocket state
         this.distanceTraveled = 0;
         this.exploded = false;
@@ -100,9 +100,14 @@ export class Rocket {
         const randomFactor = 0.1; // Adjust this value to control the amount of randomization
         const randomizedDirection = direction.clone();
         randomizedDirection.x += (Math.random() - 0.5) * randomFactor;
-        // Remove Y randomization to keep rockets at consistent height
-        // randomizedDirection.y += (Math.random() - 0.5) * randomFactor;
-        randomizedDirection.y = 0; // Force Y component to be 0 to maintain consistent height
+        
+        // If car is in air, angle the missile slightly downward to hit ground targets
+        if (isCarInAir) {
+            randomizedDirection.y = -0.1; // Downward angle when in air
+        } else {
+            randomizedDirection.y = 0; // Force Y component to be 0 to maintain consistent height when on ground
+        }
+        
         randomizedDirection.z += (Math.random() - 0.5) * randomFactor;
         randomizedDirection.normalize(); // Ensure it's still a unit vector
 
@@ -401,17 +406,10 @@ export class Rocket {
         const moveDistance = this.speed * delta;
         this.distanceTraveled += moveDistance;
 
-        // Store current Y position
-        const currentY = this.object.position.y;
-
         // Move the rocket forward in the stored direction
         this.object.position.x += this.moveDirection.x * this.speed;
-        // Skip updating Y position to maintain consistent height
-        // this.object.position.y += this.moveDirection.y * this.speed;
+        this.object.position.y += this.moveDirection.y * this.speed; // Allow Y movement for angled shots
         this.object.position.z += this.moveDirection.z * this.speed;
-
-        // Restore Y position to maintain consistent height
-        this.object.position.y = currentY;
 
         // Flicker the exhaust light for effect
         this.exhaustLight.intensity = 2 + Math.random() * 1;

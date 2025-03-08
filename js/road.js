@@ -129,12 +129,12 @@ export class Road {
         }
         
         // Load ground texture
-        const groundTexture = textureLoader.load('textures/ground.jpg');
+        const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
         groundTexture.wrapS = THREE.RepeatWrapping;
         groundTexture.wrapT = THREE.RepeatWrapping;
         
         // Increase repeat to avoid stretching and blurriness at a distance
-        groundTexture.repeat.set(8, 8);
+        groundTexture.repeat.set(6, 6);
         
         // Apply moderate texture optimizations for mobile
         if (isMobile) {
@@ -151,20 +151,35 @@ export class Road {
             groundTexture.anisotropy = 16;
         }
         
-        // Create grass material with ground.jpg texture - simplified for mobile
+        // Load normal map for the road surface - use brick bump instead of water
+        const roadNormalMap = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/brick_bump.jpg');
+        roadNormalMap.wrapS = THREE.RepeatWrapping;
+        roadNormalMap.wrapT = THREE.RepeatWrapping;
+        roadNormalMap.repeat.set(10, 10);
+        
+        // Load roughness map for the road surface
+        const roadRoughnessMap = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+        roadRoughnessMap.wrapS = THREE.RepeatWrapping;
+        roadRoughnessMap.wrapT = THREE.RepeatWrapping;
+        roadRoughnessMap.repeat.set(6, 6);
+        
+        // Create road surface material with asphalt texture - simplified for mobile
         if (isLowEndMobile) {
-            this.grassMaterial = new THREE.MeshStandardMaterial({ 
+            this.roadSurfaceMaterial = new THREE.MeshStandardMaterial({ 
                 map: groundTexture,
-                color: 0xffffff,  // Use white color to show the texture as is
-                roughness: 0.8,
-                metalness: 0.0
+                color: 0x333333,  // Slightly lighter color for asphalt
+                roughness: 0.9,   // High roughness for asphalt
+                metalness: 0.1    // Very low metalness
             });
         } else {
-            this.grassMaterial = new THREE.MeshStandardMaterial({ 
+            this.roadSurfaceMaterial = new THREE.MeshStandardMaterial({ 
                 map: groundTexture,
-                color: 0xffffff,  // Use white color to show the texture as is
-                roughness: 0.8,
-                metalness: 0.0
+                normalMap: roadNormalMap,
+                normalScale: new THREE.Vector2(0.1, 0.1), // Reduced normal map intensity
+                roughnessMap: roadRoughnessMap,
+                color: 0x333333,  // Slightly lighter color for asphalt
+                roughness: 0.9,   // High roughness for asphalt
+                metalness: 0.1    // Very low metalness for less reflections
             });
         }
         
@@ -252,42 +267,42 @@ export class Road {
             segment.meshes.push(rightDash);
         }
         
-        // Add grass on sides
-        const grassGeometryLeft = new THREE.PlaneGeometry(50, this.roadLength, 1, 4);
+        // Add road surfaces on sides
+        const roadSurfaceGeometryLeft = new THREE.PlaneGeometry(50, this.roadLength, 1, 4);
         // Adjust UVs for better texture mapping
-        const leftUVs = grassGeometryLeft.attributes.uv.array;
+        const leftUVs = roadSurfaceGeometryLeft.attributes.uv.array;
         for (let i = 0; i < leftUVs.length; i += 2) {
             // Scale UVs to repeat texture properly
             leftUVs[i] = leftUVs[i] * 2;
             leftUVs[i + 1] = leftUVs[i + 1] * 4;
         }
-        grassGeometryLeft.attributes.uv.needsUpdate = true;
+        roadSurfaceGeometryLeft.attributes.uv.needsUpdate = true;
         
-        const grassLeft = new THREE.Mesh(grassGeometryLeft, this.grassMaterial);
-        grassLeft.rotation.x = -Math.PI / 2;
-        grassLeft.position.x = -this.roadWidth/2 - 25;
-        grassLeft.position.z = zPosition;
-        grassLeft.receiveShadow = true;
-        this.scene.add(grassLeft);
-        segment.meshes.push(grassLeft);
+        const roadSurfaceLeft = new THREE.Mesh(roadSurfaceGeometryLeft, this.roadSurfaceMaterial);
+        roadSurfaceLeft.rotation.x = -Math.PI / 2;
+        roadSurfaceLeft.position.x = -this.roadWidth/2 - 25;
+        roadSurfaceLeft.position.z = zPosition;
+        roadSurfaceLeft.receiveShadow = true;
+        this.scene.add(roadSurfaceLeft);
+        segment.meshes.push(roadSurfaceLeft);
         
-        const grassGeometryRight = new THREE.PlaneGeometry(50, this.roadLength, 1, 4);
+        const roadSurfaceGeometryRight = new THREE.PlaneGeometry(50, this.roadLength, 1, 4);
         // Adjust UVs for better texture mapping
-        const rightUVs = grassGeometryRight.attributes.uv.array;
+        const rightUVs = roadSurfaceGeometryRight.attributes.uv.array;
         for (let i = 0; i < rightUVs.length; i += 2) {
             // Scale UVs to repeat texture properly
             rightUVs[i] = rightUVs[i] * 2;
             rightUVs[i + 1] = rightUVs[i + 1] * 4;
         }
-        grassGeometryRight.attributes.uv.needsUpdate = true;
+        roadSurfaceGeometryRight.attributes.uv.needsUpdate = true;
         
-        const grassRight = new THREE.Mesh(grassGeometryRight, this.grassMaterial);
-        grassRight.rotation.x = -Math.PI / 2;
-        grassRight.position.x = this.roadWidth/2 + 25;
-        grassRight.position.z = zPosition;
-        grassRight.receiveShadow = true;
-        this.scene.add(grassRight);
-        segment.meshes.push(grassRight);
+        const roadSurfaceRight = new THREE.Mesh(roadSurfaceGeometryRight, this.roadSurfaceMaterial);
+        roadSurfaceRight.rotation.x = -Math.PI / 2;
+        roadSurfaceRight.position.x = this.roadWidth/2 + 25;
+        roadSurfaceRight.position.z = zPosition;
+        roadSurfaceRight.receiveShadow = true;
+        this.scene.add(roadSurfaceRight);
+        segment.meshes.push(roadSurfaceRight);
         
         this.segments.push(segment);
         return segment;
@@ -296,7 +311,7 @@ export class Road {
     enableBackfaceCulling() {
         // Enable backface culling for all materials to improve performance
         this.roadMaterial.side = THREE.FrontSide;
-        this.grassMaterial.side = THREE.FrontSide;
+        this.roadSurfaceMaterial.side = THREE.FrontSide;
         this.markingMaterial.side = THREE.FrontSide;
     }
     
@@ -313,11 +328,11 @@ export class Road {
         }
         groundGeometry.attributes.uv.needsUpdate = true;
         
-        const ground = new THREE.Mesh(groundGeometry, this.grassMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1; // Slightly below the road to avoid z-fighting
-        ground.receiveShadow = true;
-        this.scene.add(ground);
+        const boundaryRoadSurface = new THREE.Mesh(groundGeometry, this.roadSurfaceMaterial);
+        boundaryRoadSurface.rotation.x = -Math.PI / 2;
+        boundaryRoadSurface.position.y = -0.1; // Slightly below the road to avoid z-fighting
+        boundaryRoadSurface.receiveShadow = true;
+        this.scene.add(boundaryRoadSurface);
         
         // Create boundary wall segments instead of a single large wall
         this.createBoundaryWallSegments();
