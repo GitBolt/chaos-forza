@@ -5,7 +5,7 @@ import { Car } from './car.js';
 import { Road } from './road.js';
 import { InputHandler } from './input.js';
 import { SkyDome } from './sky.js';
-import { TreeManager } from './trees.js';
+import { Rocket } from './rocket.js';
 
 // Game variables
 let mixer;
@@ -13,7 +13,8 @@ let car;
 let road;
 let input;
 let sky;
-let treeManager;
+let rocket;
+let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
 
 // Three.js setup
@@ -87,15 +88,14 @@ scene.add(cameraTarget);
 // Initialize sky with sunset
 sky = new SkyDome(scene);
 
-
 // Initialize input handler
 input = new InputHandler();
 
 // Create road
 road = new Road(scene);
 
-// Initialize tree manager after road is created
-treeManager = new TreeManager(scene, road);
+// Initialize the rocket
+rocket = new Rocket(scene);
 
 // Initialize the car
 const carObject = new THREE.Object3D();
@@ -162,6 +162,33 @@ window.onresize = function () {
 function animate() {
     const delta = clock.getDelta();
 
+    // Update rocket cooldown
+    if (rocketCooldown > 0) {
+        rocketCooldown -= delta;
+    }
+
+    // Check for space key to launch rocket
+    if (input.keys[' '] && rocketCooldown <= 0 && car) {
+        // Get car position
+        const position = car.object.position.clone();
+        
+        // Get forward direction from car - this is the direction the car is facing
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(car.object.quaternion);
+        
+        // Launch rocket in the forward direction of the car
+        // Pass the car's current speed to the rocket
+        rocket.launch(position, direction, car.speed);
+        
+        // Set cooldown to prevent rapid firing
+        rocketCooldown = 0.5; // 0.5 seconds cooldown
+    }
+
+    // Update rocket
+    if (rocket) {
+        rocket.update(delta);
+    }
+
     if (mixer) {
         mixer.update(delta);
     }
@@ -199,9 +226,6 @@ function animate() {
         ));
         // Update road segments based on car position
         road.update(car.object.position);
-        
-        // Update trees based on car position
-        treeManager.updateTrees(car.object.position);
     }
 
     renderer.render(scene, camera);
