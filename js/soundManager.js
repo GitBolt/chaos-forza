@@ -8,6 +8,7 @@ export class SoundManager {
         // Create audio objects
         this.rocketSound = new THREE.Audio(this.listener);
         this.carSound = new THREE.Audio(this.listener);
+        this.explosionSound = new THREE.Audio(this.listener);
         
         // Audio loader
         this.audioLoader = new THREE.AudioLoader();
@@ -30,6 +31,38 @@ export class SoundManager {
             this.carSound.setLoop(true);
             this.carSound.setVolume(0.3);
         });
+        
+        // Load explosion sound
+        this.audioLoader.load('sound/explosion.mp3', (buffer) => {
+            this.explosionSound.setBuffer(buffer);
+            this.explosionSound.setLoop(false);
+            this.explosionSound.setVolume(0.7);
+        }, undefined, (error) => {
+            console.warn('Failed to load explosion sound:', error);
+            // Create a fallback explosion sound using oscillator
+            this.createFallbackExplosionSound();
+        });
+    }
+    
+    createFallbackExplosionSound() {
+        // Create a buffer for a simple explosion sound
+        const context = this.listener.context;
+        const sampleRate = context.sampleRate;
+        const duration = 1; // 1 second
+        const numChannels = 1;
+        const length = sampleRate * duration;
+        const buffer = context.createBuffer(numChannels, length, sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        // Generate noise with decay for explosion effect
+        for (let i = 0; i < length; i++) {
+            const t = i / sampleRate;
+            const decay = Math.exp(-5 * t);
+            data[i] = (Math.random() * 2 - 1) * decay;
+        }
+        
+        // Set the buffer
+        this.explosionSound.setBuffer(buffer);
     }
     
     playRocketSound() {
@@ -37,6 +70,17 @@ export class SoundManager {
             this.rocketSound.stop();
         }
         this.rocketSound.play();
+    }
+    
+    playExplosionSound() {
+        // Create a clone of the explosion sound to allow multiple explosions at once
+        const explosionInstance = this.explosionSound.clone();
+        explosionInstance.play();
+        
+        // Clean up the instance after it's done playing
+        setTimeout(() => {
+            explosionInstance.disconnect();
+        }, 2000); // 2 seconds should be enough for most explosion sounds
     }
     
     updateCarSound(speed, isAccelerating, isBraking) {
@@ -83,6 +127,9 @@ export class SoundManager {
         }
         if (this.carSound) {
             this.carSound.stop();
+        }
+        if (this.explosionSound) {
+            this.explosionSound.stop();
         }
     }
 } 

@@ -133,255 +133,256 @@ export class Rocket {
         this.active = false;
         this.object.visible = false;
 
-        // Create explosion effects
-        this.createExplosion();
+        // Create simplified explosion effect with particles and smoke
+        this.createEnhancedExplosion();
 
-        // Set a timeout to mark explosion as complete after all animations finish
+        // Mark explosion as complete after a short delay
         setTimeout(() => {
             this.explosionComplete = true;
-        }, 5000); // 5 seconds should be enough for all particles to fade out
+        }, 1000);
     }
 
-    createExplosion() {
+    createEnhancedExplosion() {
         const explosionPosition = this.object.position.clone();
 
-        // Create explosion flash
-        this.createExplosionFlash(explosionPosition);
+        // Create a more prominent flash effect
+        this.createEnhancedFlash(explosionPosition);
 
-        // Create explosion particles
-        this.createExplosionParticles(explosionPosition);
+        // Create a simple explosion sphere
+        const explosionGeometry = new THREE.SphereGeometry(6, 12, 12);
+        const explosionMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff6600,
+            transparent: true,
+            opacity: 0.8
+        });
 
-        // Create smoke cloud
-        this.createSmokeCloud(explosionPosition);
-    }
+        const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+        explosion.position.copy(explosionPosition);
+        this.scene.add(explosion);
 
-    createExplosionFlash(position) {
-        // Create a bright flash at the explosion center
-        const flashLight = new THREE.PointLight(0xffaa00, 30, 100); // Increased intensity and range
-        flashLight.position.copy(position);
-        this.scene.add(flashLight);
-
-        // Animate the flash - bright then fade out
-        let intensity = 100; // Increased initial intensity
-        const flashAnimation = () => {
-            intensity *= 0.9;
-            flashLight.intensity = intensity;
-
-            if (intensity > 0.1) {
-                requestAnimationFrame(flashAnimation);
+        // Animate the explosion sphere
+        let scale = 0.1;
+        const expandAndFade = () => {
+            scale += 0.1;
+            explosion.scale.set(scale, scale, scale);
+            explosionMaterial.opacity -= 0.03;
+            
+            if (explosionMaterial.opacity > 0.05) {
+                requestAnimationFrame(expandAndFade);
             } else {
-                this.scene.remove(flashLight);
+                this.scene.remove(explosion);
+                explosionGeometry.dispose();
+                explosionMaterial.dispose();
             }
         };
-
-        flashAnimation();
+        
+        requestAnimationFrame(expandAndFade);
+        
+        // Add simplified particles (just a few for visual effect)
+        this.addSimpleParticles(explosionPosition);
+        
+        // Add simplified smoke (just a few for visual effect)
+        this.addSimpleSmoke(explosionPosition);
     }
-
-    createExplosionParticles(position) {
-        // Create particle geometry for the explosion
-        const particleCount = 600; // Doubled particle count for denser explosion
-        const particleGeometry = new THREE.BufferGeometry();
-
-        // Create a canvas texture for particles
-        const particleTexture = this.createParticleTexture();
-
-        // Create particle material
-        const particleMaterial = new THREE.PointsMaterial({
-            size: 2.0, // Increased particle size
-            map: particleTexture,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
+    
+    createEnhancedFlash(position) {
+        // Create a bright central flash light
+        const flashLight = new THREE.PointLight(0xffaa00, 15, 25);
+        flashLight.position.copy(position);
+        this.scene.add(flashLight);
+        
+        // Create a secondary, wider flash light
+        const wideFlashLight = new THREE.PointLight(0xff5500, 8, 40);
+        wideFlashLight.position.copy(position);
+        this.scene.add(wideFlashLight);
+        
+        // Create a visual flash sphere (bright glowing ball)
+        const flashGeometry = new THREE.SphereGeometry(3, 8, 8);
+        const flashMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffaa,
             transparent: true,
-            vertexColors: true
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending
         });
-
-        // Create arrays for particle attributes
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
-        const sizes = new Float32Array(particleCount);
-
-        // Initialize particles with random positions in a sphere
-        for (let i = 0; i < particleCount; i++) {
-            // Random position in sphere - larger initial radius
-            const radius = Math.random() * 2.0; // Doubled radius for bigger explosion
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.random() * Math.PI;
-
-            // Convert spherical to cartesian coordinates
-            positions[i * 3] = position.x + radius * Math.sin(phi) * Math.cos(theta);
-            positions[i * 3 + 1] = position.y + radius * Math.sin(phi) * Math.sin(theta);
-            positions[i * 3 + 2] = position.z + radius * Math.cos(phi);
-
-            // Color gradient from yellow to orange to red
-            const colorChoice = Math.random();
-            if (colorChoice > 0.7) {
-                // Bright center - white/yellow
-                colors[i * 3] = 1.0;     // R
-                colors[i * 3 + 1] = 1.0;  // G
-                colors[i * 3 + 2] = 0.7;  // B
-            } else if (colorChoice > 0.4) {
-                // Mid flame - orange
-                colors[i * 3] = 1.0;     // R
-                colors[i * 3 + 1] = 0.6;  // G
-                colors[i * 3 + 2] = 0.1;  // B
+        
+        const flashSphere = new THREE.Mesh(flashGeometry, flashMaterial);
+        flashSphere.position.copy(position);
+        this.scene.add(flashSphere);
+        
+        // Animate the flash with quick expansion and fade
+        let flashScale = 0.1;
+        let intensity1 = 15;
+        let intensity2 = 8;
+        
+        const animateFlash = () => {
+            // Expand flash sphere
+            flashScale += 0.2;
+            flashSphere.scale.set(flashScale, flashScale, flashScale);
+            
+            // Fade out flash sphere
+            flashMaterial.opacity -= 0.05;
+            
+            // Reduce light intensity
+            intensity1 *= 0.85;
+            intensity2 *= 0.85;
+            flashLight.intensity = intensity1;
+            wideFlashLight.intensity = intensity2;
+            
+            if (flashMaterial.opacity > 0.05) {
+                requestAnimationFrame(animateFlash);
             } else {
-                // Outer flame - deep red
-                colors[i * 3] = 0.9;     // R
-                colors[i * 3 + 1] = 0.2;  // G
-                colors[i * 3 + 2] = 0.0;  // B
+                // Clean up
+                this.scene.remove(flashSphere);
+                this.scene.remove(flashLight);
+                this.scene.remove(wideFlashLight);
+                flashGeometry.dispose();
+                flashMaterial.dispose();
             }
-
-            // Random sizes - larger
-            sizes[i] = Math.random() * 2.5 + 1.0;
-        }
-
-        // Add attributes to geometry
-        particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        particleGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-        // Create particle system
-        const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
-        this.scene.add(particleSystem);
-
-        // Store particle data for animation
-        this.explosionParticles.push({
-            system: particleSystem,
-            geometry: particleGeometry,
-            material: particleMaterial,
-            positions: positions,
-            colors: colors,
-            sizes: sizes,
-            velocities: Array(particleCount).fill().map(() => new THREE.Vector3(
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 20
-            )),
-            life: 0,
-            maxLife: 2.5
-        });
+        };
+        
+        requestAnimationFrame(animateFlash);
     }
-
-    createSmokeCloud(position) {
-        // Create a smoke cloud that rises and expands
-        const smokeCount = 40; // Increased smoke particle count
-        const smokeGeometry = new THREE.BufferGeometry();
-
-        // Create a canvas texture for smoke particles
-        const smokeTexture = this.createSmokeTexture();
-
-        const smokeMaterial = new THREE.PointsMaterial({
-            size: 5.0, // Increased smoke particle size
-            map: smokeTexture,
-            blending: THREE.NormalBlending,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8, // Increased opacity
-            color: 0x444444
-        });
-
-        // Create arrays for smoke attributes
-        const positions = new Float32Array(smokeCount * 3);
-        const sizes = new Float32Array(smokeCount);
-
-        // Initialize smoke particles
+    
+    addSimpleParticles(position) {
+        // Create just a few simple particles
+        const particleCount = 15; // Small number for performance
+        
+        for (let i = 0; i < particleCount; i++) {
+            // Create a simple sphere for each particle
+            const size = 0.3 + Math.random() * 0.4;
+            const geometry = new THREE.SphereGeometry(size, 4, 4); // Very low poly
+            
+            // Create a material with random orange/red color
+            const hue = 0.05 + Math.random() * 0.05; // Orange-red range
+            const color = new THREE.Color().setHSL(hue, 1.0, 0.5 + Math.random() * 0.3);
+            
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(geometry, material);
+            
+            // Position randomly around explosion center
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 4;
+            particle.position.set(
+                position.x + Math.cos(angle) * radius,
+                position.y + Math.random() * 2 - 1,
+                position.z + Math.sin(angle) * radius
+            );
+            
+            this.scene.add(particle);
+            
+            // Animate particle with simple outward movement and fading
+            const direction = new THREE.Vector3(
+                Math.random() * 2 - 1,
+                Math.random() * 2 - 1,
+                Math.random() * 2 - 1
+            ).normalize();
+            
+            const speed = 2 + Math.random() * 3;
+            
+            // Simple animation function
+            const animateParticle = () => {
+                // Move outward
+                particle.position.x += direction.x * 0.1 * speed;
+                particle.position.y += direction.y * 0.1 * speed;
+                particle.position.z += direction.z * 0.1 * speed;
+                
+                // Fade out
+                material.opacity -= 0.02;
+                
+                if (material.opacity > 0.05) {
+                    requestAnimationFrame(animateParticle);
+                } else {
+                    // Clean up
+                    this.scene.remove(particle);
+                    geometry.dispose();
+                    material.dispose();
+                }
+            };
+            
+            requestAnimationFrame(animateParticle);
+        }
+    }
+    
+    addSimpleSmoke(position) {
+        // Create just a few simple smoke puffs
+        const smokeCount = 8; // Small number for performance
+        
         for (let i = 0; i < smokeCount; i++) {
-            // Start at explosion center with wider spread
-            positions[i * 3] = position.x + (Math.random() - 0.5) * 5; // Increased spread
-            positions[i * 3 + 1] = position.y + (Math.random() - 0.5) * 2; // Increased vertical spread
-            positions[i * 3 + 2] = position.z + (Math.random() - 0.5) * 5; // Increased spread
-
-            // Random sizes
-            sizes[i] = 2.0 + Math.random() * 3.0; // Increased size range
+            // Create a simple plane for each smoke puff
+            const size = 2 + Math.random() * 3;
+            const geometry = new THREE.PlaneGeometry(size, size);
+            
+            // Create a material with gray color
+            const brightness = 0.2 + Math.random() * 0.3;
+            const color = new THREE.Color(brightness, brightness, brightness);
+            
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.4,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            
+            const smoke = new THREE.Mesh(geometry, material);
+            
+            // Position randomly around explosion center
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 3;
+            smoke.position.set(
+                position.x + Math.cos(angle) * radius,
+                position.y + Math.random() * 2 - 0.5,
+                position.z + Math.sin(angle) * radius
+            );
+            
+            // Random rotation
+            smoke.rotation.z = Math.random() * Math.PI * 2;
+            
+            this.scene.add(smoke);
+            
+            // Animate smoke with rising and expanding
+            const direction = new THREE.Vector3(
+                Math.random() * 0.4 - 0.2,
+                0.3 + Math.random() * 0.3, // Mostly upward
+                Math.random() * 0.4 - 0.2
+            );
+            
+            let scale = 0.5;
+            
+            // Simple animation function
+            const animateSmoke = () => {
+                // Move upward and outward
+                smoke.position.x += direction.x * 0.1;
+                smoke.position.y += direction.y * 0.1;
+                smoke.position.z += direction.z * 0.1;
+                
+                // Expand
+                scale += 0.02;
+                smoke.scale.set(scale, scale, scale);
+                
+                // Fade out
+                material.opacity -= 0.01;
+                
+                // Rotate slowly
+                smoke.rotation.z += 0.01;
+                
+                if (material.opacity > 0.05) {
+                    requestAnimationFrame(animateSmoke);
+                } else {
+                    // Clean up
+                    this.scene.remove(smoke);
+                    geometry.dispose();
+                    material.dispose();
+                }
+            };
+            
+            requestAnimationFrame(animateSmoke);
         }
-
-        // Add attributes to geometry
-        smokeGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        smokeGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-        // Create smoke system
-        const smokeSystem = new THREE.Points(smokeGeometry, smokeMaterial);
-        this.scene.add(smokeSystem);
-
-        // Store smoke data for animation
-        this.explosionParticles.push({
-            system: smokeSystem,
-            geometry: smokeGeometry,
-            material: smokeMaterial,
-            positions: positions,
-            sizes: sizes,
-            velocities: Array(smokeCount).fill().map(() => new THREE.Vector3(
-                (Math.random() - 0.5) * 3,
-                Math.random() * 3 + 1.5,
-                (Math.random() - 0.5) * 3
-            )),
-            life: 0,
-            maxLife: 6.0,
-            isSmoke: true
-        });
-    }
-
-    createParticleTexture() {
-        // Create a canvas for the particle texture
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-
-        const context = canvas.getContext('2d');
-
-        // Create a radial gradient for a soft particle look
-        const gradient = context.createRadialGradient(
-            32, 32, 0,
-            32, 32, 32
-        );
-
-        // Add color stops for a more realistic fire look
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.2, 'rgba(255, 220, 100, 0.9)');
-        gradient.addColorStop(0.4, 'rgba(255, 100, 50, 0.8)');
-        gradient.addColorStop(0.8, 'rgba(200, 50, 0, 0.4)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        // Fill the canvas with the gradient
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, 64, 64);
-
-        // Create a texture from the canvas
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.needsUpdate = true;
-
-        return texture;
-    }
-
-    createSmokeTexture() {
-        // Create a canvas for the smoke texture
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-
-        const context = canvas.getContext('2d');
-
-        // Create a radial gradient for a soft smoke look
-        const gradient = context.createRadialGradient(
-            32, 32, 0,
-            32, 32, 32
-        );
-
-        // Add color stops for a more realistic smoke look
-        gradient.addColorStop(0, 'rgba(150, 150, 150, 0.9)');
-        gradient.addColorStop(0.4, 'rgba(100, 100, 100, 0.7)');
-        gradient.addColorStop(0.7, 'rgba(70, 70, 70, 0.4)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        // Fill the canvas with the gradient
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, 64, 64);
-
-        // Create a texture from the canvas
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.needsUpdate = true;
-
-        return texture;
     }
 
     update(delta) {
@@ -389,7 +390,6 @@ export class Rocket {
 
         // If exploded, update explosion particles
         if (this.exploded) {
-            this.updateExplosionParticles(delta);
             return;
         }
 
@@ -442,125 +442,6 @@ export class Rocket {
         }
     }
 
-    updateExplosionParticles(delta) {
-        // Update explosion particles
-        for (let i = this.explosionParticles.length - 1; i >= 0; i--) {
-            const particles = this.explosionParticles[i];
-
-            // Update life
-            particles.life += delta;
-
-            if (particles.life >= particles.maxLife) {
-                // Remove expired particle system
-                this.scene.remove(particles.system);
-                particles.geometry.dispose();
-                particles.material.dispose();
-                if (particles.material.map) {
-                    particles.material.map.dispose();
-                }
-                this.explosionParticles.splice(i, 1);
-            } else {
-                // Update particle positions
-                const positions = particles.positions;
-                const colors = particles.colors;
-                const sizes = particles.sizes;
-
-                // Life ratio for animations
-                const lifeRatio = particles.life / particles.maxLife;
-
-                // Update each particle
-                for (let j = 0; j < positions.length / 3; j++) {
-                    // Apply velocity with decreasing speed over time
-                    const speedFactor = particles.isSmoke ?
-                        (1 - lifeRatio * 0.5) : // Smoke slows down less
-                        (1 - lifeRatio * 0.8);  // Fire slows down more
-
-                    positions[j * 3] += particles.velocities[j].x * delta * speedFactor;
-                    positions[j * 3 + 1] += particles.velocities[j].y * delta * speedFactor;
-                    positions[j * 3 + 2] += particles.velocities[j].z * delta * speedFactor;
-
-                    // For smoke, add upward drift and expansion
-                    if (particles.isSmoke) {
-                        // Upward drift
-                        positions[j * 3 + 1] += delta * 0.5;
-
-                        // Expand size over time
-                        sizes[j] = particles.sizes[j] * (1 + lifeRatio);
-
-                        // Fade out opacity
-                        particles.material.opacity = 0.6 * (1 - lifeRatio);
-                    } else if (colors) {
-                        // For fire particles, transition color from bright to dark
-                        if (lifeRatio < 0.3) {
-                            // Initial phase - maintain color
-                        } else if (lifeRatio < 0.7) {
-                            // Middle phase - fade to red
-                            colors[j * 3 + 1] *= 0.98; // Green fades
-                            colors[j * 3 + 2] *= 0.98; // Blue fades
-                        } else {
-                            // Final phase - fade to black
-                            colors[j * 3] *= 0.95; // Red fades
-                            colors[j * 3 + 1] *= 0.9; // Green fades faster
-                            colors[j * 3 + 2] *= 0.9; // Blue fades faster
-                        }
-
-                        // Shrink size over time
-                        sizes[j] = particles.sizes[j] * (1 - lifeRatio * 0.5);
-                    }
-                }
-
-                // Mark attributes as needing update
-                particles.geometry.attributes.position.needsUpdate = true;
-                if (sizes) particles.geometry.attributes.size.needsUpdate = true;
-                if (colors) particles.geometry.attributes.color.needsUpdate = true;
-            }
-        }
-
-        // Update debris particles
-        for (let i = this.debrisParticles.length - 1; i >= 0; i--) {
-            const debris = this.debrisParticles[i];
-
-            // Update life
-            debris.life += delta;
-
-            if (debris.life >= debris.maxLife) {
-                // Remove expired debris
-                this.scene.remove(debris.system);
-                debris.geometry.dispose();
-                this.debrisParticles.splice(i, 1);
-            } else {
-                // Update debris positions
-                const positions = debris.positions;
-                const velocities = debris.velocities;
-
-                // Apply gravity to velocities
-                for (let j = 0; j < velocities.length; j++) {
-                    velocities[j] -= debris.gravity * delta;
-                }
-
-                // Update each debris particle
-                for (let j = 0; j < positions.length / 3; j++) {
-                    positions[j * 3] += velocities[j * 3] * delta;
-                    positions[j * 3 + 1] += velocities[j * 3 + 1] * delta;
-                    positions[j * 3 + 2] += velocities[j * 3 + 2] * delta;
-
-                    // Bounce off ground
-                    if (positions[j * 3 + 1] < 0) {
-                        positions[j * 3 + 1] = 0;
-                        velocities[j * 3 + 1] = -velocities[j * 3 + 1] * 0.4; // Bounce with energy loss
-
-                        // Reduce horizontal velocity due to friction
-                        velocities[j * 3] *= 0.8;
-                        velocities[j * 3 + 2] *= 0.8;
-                    }
-                }
-
-                // Mark attributes as needing update
-                debris.geometry.attributes.position.needsUpdate = true;
-            }
-        }
-    }
-
     reset() {
         this.active = false;
         this.object.visible = false;
@@ -593,27 +474,10 @@ export class Rocket {
             this.particles.dispose();
         }
         
-        // Remove all explosion particles
-        for (const particle of this.explosionParticles) {
-            if (particle.system) {
-                this.scene.remove(particle.system);
-                particle.geometry.dispose();
-                particle.material.dispose();
-                if (particle.material.map) {
-                    particle.material.map.dispose();
-                }
-            }
-        }
-
-        for (const debris of this.debrisParticles) {
-            if (debris.system) {
-                this.scene.remove(debris.system);
-                debris.geometry.dispose();
-            }
-        }
-
-        // Clear arrays
-        this.explosionParticles = [];
-        this.debrisParticles = [];
+        // Force cleanup of any remaining objects
+        // This is a safety measure to ensure no memory leaks
+        setTimeout(() => {
+            this.explosionComplete = true;
+        }, 100);
     }
 } 

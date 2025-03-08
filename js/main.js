@@ -7,6 +7,7 @@ import { InputHandler } from './input.js';
 import { SkyDome } from './sky.js';
 import { Rocket } from './rocket.js';
 import { SoundManager } from './soundManager.js';
+import { EnemyVehicle } from './enemyVehicle.js';
 
 // Game variables
 let mixer;
@@ -18,6 +19,8 @@ let rockets = []; // Array to store multiple rockets
 let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
 let soundManager; // Sound manager instance
+let enemyVehicles = []; // Array to store enemy vehicles
+const ENEMY_COUNT = 3; // Drastically reduced from 6 to 3 for better performance
 
 // Three.js setup
 const clock = new THREE.Clock();
@@ -144,6 +147,9 @@ loader.load('car.glb', function (gltf) {
         mixer = new THREE.AnimationMixer(model);
         mixer.clipAction(gltf.animations[0]).play();
     }
+    
+    // Create enemy vehicles after player car is loaded
+    createEnemyVehicles();
 
     renderer.setAnimationLoop(animate);
 
@@ -157,6 +163,27 @@ window.onresize = function () {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 };
+
+// Function to create enemy vehicles
+function createEnemyVehicles() {
+    // Create ENEMY_COUNT enemy vehicles
+    for (let i = 0; i < ENEMY_COUNT; i++) {
+        // Create random position within the boundary
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * (road.boundaryRadius * 0.8); // 80% of boundary radius
+        const x = Math.cos(angle) * distance;
+        const z = Math.sin(angle) * distance;
+        
+        // Create position vector
+        const position = new THREE.Vector3(x, 0, z);
+        
+        // Create enemy vehicle
+        const enemyVehicle = new EnemyVehicle(scene, position, road);
+        
+        // Add to array
+        enemyVehicles.push(enemyVehicle);
+    }
+}
 
 // Animation loop
 function animate() {
@@ -192,12 +219,28 @@ function animate() {
     for (let i = rockets.length - 1; i >= 0; i--) {
         rockets[i].update(delta);
         
+        // Check for collisions with enemy vehicles
+        if (!rockets[i].exploded) {
+            checkRocketEnemyCollisions(rockets[i]);
+        }
+        
         // Remove exploded rockets that have completed their animation
         if (rockets[i].exploded && rockets[i].explosionComplete) {
+            // Ensure proper cleanup
             rockets[i].dispose();
             rockets.splice(i, 1);
+            
+            // Limit the number of active rockets to prevent memory issues
+            if (rockets.length > 10) {
+                // If we have too many rockets, remove the oldest ones
+                const oldRocket = rockets.shift();
+                oldRocket.dispose();
+            }
         }
     }
+    
+    // Update enemy vehicles
+    updateEnemyVehicles(delta);
 
     if (mixer) {
         mixer.update(delta);
@@ -229,6 +272,103 @@ function animate() {
 
     // Standard rendering
     renderer.render(scene, camera);
+}
+
+// Function to update enemy vehicles
+function updateEnemyVehicles(delta) {
+    // Only update one vehicle per frame to prevent lag
+    const maxUpdatesPerFrame = 1; // Reduced from 3 to 1
+    let updatesThisFrame = 0;
+    
+    // Update each enemy vehicle
+    for (let i = enemyVehicles.length - 1; i >= 0; i--) {
+        // If this vehicle is destroyed, always update it to complete explosion animation
+        if (enemyVehicles[i].destroyed) {
+            enemyVehicles[i].update(delta, car ? car.object.position : null);
+            
+            // Remove destroyed vehicles that have completed their explosion animation
+            if (enemyVehicles[i].explosionComplete) {
+                enemyVehicles[i].dispose();
+                enemyVehicles.splice(i, 1);
+                
+                // Create a new enemy vehicle to replace the destroyed one, but only if we're below the max count
+                // This helps prevent lag spikes from creating too many vehicles at once
+                if (car && enemyVehicles.length < ENEMY_COUNT) {
+                    // Delay creation of new vehicles to prevent lag spikes
+                    setTimeout(() => {
+                        // Create random position within the boundary but away from the player
+                        let position;
+                        do {
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = Math.random() * (road.boundaryRadius * 0.8);
+                            const x = Math.cos(angle) * distance;
+                            const z = Math.sin(angle) * distance;
+                            position = new THREE.Vector3(x, 0, z);
+                        } while (position.distanceTo(car.object.position) < 50); // Ensure it's at least 50 units away from player
+                        
+                        // Create new enemy vehicle
+                        const enemyVehicle = new EnemyVehicle(scene, position, road);
+                        enemyVehicles.push(enemyVehicle);
+                    }, 2000); // Increased delay to 2 seconds
+                }
+            }
+        } 
+        // For non-destroyed vehicles, limit updates per frame and skip frames
+        else if (updatesThisFrame < maxUpdatesPerFrame) {
+            // Only update every 3rd frame for better performance
+            if (i % 3 === Math.floor(Date.now() / 1000) % 3) {
+                enemyVehicles[i].update(delta, car ? car.object.position : null);
+                updatesThisFrame++;
+            }
+        }
+    }
+}
+
+// Function to check for collisions between rockets and enemy vehicles
+function checkRocketEnemyCollisions(rocket) {
+    if (rocket.exploded) return;
+    
+    // Get rocket position
+    const rocketPosition = rocket.object.position;
+    
+    // Check each enemy vehicle - limit to nearest enemies for performance
+    let nearestEnemies = [];
+    
+    // First pass: find enemies that are potentially within range (rough check)
+    for (const enemy of enemyVehicles) {
+        // Skip already destroyed enemies
+        if (enemy.destroyed) continue;
+        
+        // Quick distance check (squared distance for performance)
+        const dx = enemy.object.position.x - rocketPosition.x;
+        const dz = enemy.object.position.z - rocketPosition.z;
+        const distanceSquared = dx * dx + dz * dz;
+        
+        // If potentially within range (using a generous threshold), add to candidates
+        if (distanceSquared < 100) { // 10 units squared
+            nearestEnemies.push(enemy);
+        }
+    }
+    
+    // Second pass: check actual collisions only for nearby enemies
+    for (const enemy of nearestEnemies) {
+        // Check if enemy is within explosion range
+        if (enemy.checkCollision(rocketPosition, 6)) {
+            // Explode the rocket
+            rocket.explode();
+            
+            // Destroy the enemy vehicle with a slight delay to prevent simultaneous explosions
+            setTimeout(() => {
+                enemy.destroy(rocketPosition);
+                
+                // Play explosion sound
+                soundManager.playExplosionSound();
+            }, 50);
+            
+            // No need to check other enemies for this rocket
+            break;
+        }
+    }
 }
 
 // Render with depth pre-pass for better performance - disabled for now
