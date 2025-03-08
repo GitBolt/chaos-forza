@@ -14,7 +14,7 @@ export class Car {
         // Physics properties
         this.speed = 0;
         this.direction = new THREE.Vector3(0, 0, -1); // Forward direction
-        this.maxForwardSpeed = 10;
+        this.maxForwardSpeed = 6;
         this.maxReverseSpeed = 0.5;
         this.acceleration = 0.008;
         this.deceleration = 0.005;
