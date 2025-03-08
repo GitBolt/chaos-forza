@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 
 export class Car {
-    constructor(object, model, soundManager) {
+    constructor(object, model) {
         this.object = object;
         this.model = model;
-        this.soundManager = soundManager;
         
         // Fix car orientation - rotate the model 180 degrees to face forward
         // this.model.rotation.y = Math.PI;
@@ -132,11 +131,6 @@ export class Car {
         } else {
             // Reset to last valid position if out of bounds
             this.object.position.copy(this.lastValidPosition);
-        }
-        
-        // Update car sound if sound manager is available
-        if (this.soundManager) {
-            this.soundManager.updateCarSound(this.speed, this.isAccelerating, this.isBraking);
         }
     }
     

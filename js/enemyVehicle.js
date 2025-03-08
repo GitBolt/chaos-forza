@@ -50,7 +50,7 @@ export class EnemyVehicle {
         loader.load('agera.glb', (gltf) => {
             this.model = gltf.scene;
             
-            // Scale and position the model - reduce size to 0.25 of original (was 0.4)
+            // Scale and position the model - reduce size to 0.2 of original (was 0.25)
             this.model.scale.set(0.2, 0.2, 0.2);
             
             // Apply materials
@@ -73,33 +73,19 @@ export class EnemyVehicle {
     }
     
     applyMaterials() {
-        // Create environment map for reflections
-        const cubeTextureLoader = new THREE.CubeTextureLoader();
-        const envMap = cubeTextureLoader.load([
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negx.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negy.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/posz.jpg',
-            'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/cube/Park2/negz.jpg'
-        ]);
-        
-        // Apply materials to the car
+        // Use a simpler material for better performance with many vehicles
         this.model.traverse((child) => {
             if (child.isMesh) {
                 // Create a copy of the original material to preserve textures
                 const originalMaterial = child.material;
                 
-                // Create a new physical material
-                const material = new THREE.MeshPhysicalMaterial({
+                // Create a simpler material with lower quality settings
+                const material = new THREE.MeshStandardMaterial({
                     map: originalMaterial.map,
                     color: originalMaterial.color || new THREE.Color(0x888888),
-                    metalness: 0.8,
-                    roughness: 0.2,
-                    clearcoat: 0.5,
-                    clearcoatRoughness: 0.1,
-                    envMap: envMap,
-                    envMapIntensity: 1.0
+                    metalness: 0.6,
+                    roughness: 0.4,
+                    // Remove environment maps and complex properties for performance
                 });
                 
                 // Apply the new material

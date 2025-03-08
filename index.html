@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>three.js webgl - car game</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
+		<title>The Arena - Vehicular Combat</title>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="stylesheet" href="main.css">
 		<style>
 			body {
-				background-color: #bfe3dd;
-				color: #000;
+				background-color: #000;
+				color: #fff;
 			}
 
 			a {
@@ -21,9 +21,25 @@
 
 		<div id="container"></div>
 
-		<div id="info">
-			the arena<br>
-			W/S - Accelerate/Reverse, A/D - Turn Left/Right
+		<!-- Game UI Elements -->
+		<div id="game-ui">
+			<!-- Game Title -->
+			<div id="game-title">THE ARENA</div>
+			
+			<!-- Kill Counter -->
+			<div id="kill-counter">
+				<span id="kill-count">0</span> KILLS
+			</div>
+			
+			<!-- Kill Notification -->
+			<div id="kill-notification"></div>
+			
+			<!-- Controls Guide -->
+			<div id="controls-guide">
+				<div class="control-item">W,A,S,D - Drive</div>
+				<div class="control-item">SPACE - Fire Rocket</div>
+				<div class="control-item">SHIFT - Boost</div>
+			</div>
 		</div>
 
 		<!-- Import maps polyfill -->
@@ -33,7 +49,9 @@
 			{
 				"imports": {
 					"three": "https://unpkg.com/three@0.154.0/build/three.module.js",
-					"three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/"
+					"three/addons/loaders/GLTFLoader.js": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/GLTFLoader.js",
+					"three/addons/loaders/DRACOLoader.js": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/DRACOLoader.js",
+					"three/addons/loaders/EXRLoader.js": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/EXRLoader.js"
 				}
 			}
 		</script>

@@ -6,7 +6,6 @@ import { Road } from './road.js';
 import { InputHandler } from './input.js';
 import { SkyDome } from './sky.js';
 import { Rocket } from './rocket.js';
-import { SoundManager } from './soundManager.js';
 import { EnemyVehicle } from './enemyVehicle.js';
 
 // Game variables
@@ -18,9 +17,85 @@ let sky;
 let rockets = []; // Array to store multiple rockets
 let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
-let soundManager; // Sound manager instance
 let enemyVehicles = []; // Array to store enemy vehicles
-const ENEMY_COUNT = 3; // Drastically reduced from 6 to 3 for better performance
+const ENEMY_COUNT = 40; // Increased from 3 to 40 as requested
+const ENEMY_SPAWN_BATCH_SIZE = 5; // Spawn enemies in batches to prevent lag
+let enemySpawnTimer = 0; // Timer for spawning enemy batches
+
+// UI variables
+let killCount = 0;
+let killStreakCount = 0;
+let lastKillTime = 0;
+let killCountElement;
+let killNotificationElement;
+
+// Simple audio elements
+const explosionSound = new Audio('sound/explosion.mp3');
+explosionSound.volume = 0.7;
+
+const rocketSound = new Audio('sound/rocket.mp3');
+rocketSound.volume = 0.5;
+
+const carSound = new Audio('sound/car.mp3');
+carSound.volume = 0.3;
+carSound.loop = true;
+
+// Function to play explosion sound
+function playExplosionSound() {
+    // Clone the audio to allow multiple sounds at once
+    const sound = explosionSound.cloneNode();
+    sound.volume = 0.7;
+    sound.play().catch(err => console.log('Error playing explosion sound:', err));
+}
+
+// Function to play rocket sound
+function playRocketSound() {
+    // Clone the audio to allow multiple sounds at once
+    const sound = rocketSound.cloneNode();
+    sound.volume = 0.5;
+    sound.play().catch(err => console.log('Error playing rocket sound:', err));
+}
+
+// Function to update car sound
+function updateCarSound(speed, isAccelerating, isBraking) {
+    // Start the sound if it's not already playing and the car is moving
+    if (!carSound.paused && Math.abs(speed) < 0.1) {
+        carSound.pause();
+    } else if (carSound.paused && Math.abs(speed) > 0.1) {
+        carSound.play().catch(err => console.log('Error playing car sound:', err));
+    }
+    
+    // Adjust playback rate based on speed
+    if (!carSound.paused) {
+        // Base pitch is 1.0
+        let pitch = 0.5 + Math.abs(speed) / 4; // Adjust pitch based on speed
+        
+        // Increase pitch during acceleration
+        if (isAccelerating) {
+            pitch *= 1.2;
+        }
+        
+        // Decrease pitch during braking
+        if (isBraking) {
+            pitch *= 0.8;
+        }
+        
+        // Clamp pitch between reasonable values
+        pitch = Math.max(0.5, Math.min(2.0, pitch));
+        
+        // Set the playback rate (pitch)
+        carSound.playbackRate = pitch;
+        
+        // Adjust volume based on speed
+        carSound.volume = 0.2 + Math.min(0.6, Math.abs(speed) / 4);
+    }
+}
+
+// Initialize UI elements after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    killCountElement = document.getElementById('kill-count');
+    killNotificationElement = document.getElementById('kill-notification');
+});
 
 // Three.js setup
 const clock = new THREE.Clock();
@@ -103,11 +178,6 @@ dracoLoader.setDecoderPath('https://unpkg.com/three@0.154.0/examples/jsm/libs/dr
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 
-// Initialize sound manager
-soundManager = new SoundManager();
-// Add audio listener to camera
-camera.add(soundManager.listener);
-
 // Load car model
 loader.load('car.glb', function (gltf) {
     const model = gltf.scene;
@@ -126,7 +196,7 @@ loader.load('car.glb', function (gltf) {
     carObject.add(model);
 
     // Initialize car physics and controls
-    car = new Car(carObject, model, soundManager);
+    car = new Car(carObject, model);
 
     // Set the car's boundary radius to match the road's boundary
     car.boundaryRadius = road.boundaryRadius - 5; // 5 units buffer
@@ -166,8 +236,24 @@ window.onresize = function () {
 
 // Function to create enemy vehicles
 function createEnemyVehicles() {
-    // Create ENEMY_COUNT enemy vehicles
-    for (let i = 0; i < ENEMY_COUNT; i++) {
+    // Create initial batch of enemies
+    spawnEnemyBatch(ENEMY_SPAWN_BATCH_SIZE);
+    
+    // Set up interval to spawn remaining enemies in batches
+    const spawnInterval = setInterval(() => {
+        if (enemyVehicles.length < ENEMY_COUNT) {
+            spawnEnemyBatch(ENEMY_SPAWN_BATCH_SIZE);
+        } else {
+            clearInterval(spawnInterval);
+        }
+    }, 2000); // Spawn a batch every 2 seconds
+}
+
+// Function to spawn a batch of enemy vehicles
+function spawnEnemyBatch(batchSize) {
+    const count = Math.min(batchSize, ENEMY_COUNT - enemyVehicles.length);
+    
+    for (let i = 0; i < count; i++) {
         // Create random position within the boundary
         const angle = Math.random() * Math.PI * 2;
         const distance = Math.random() * (road.boundaryRadius * 0.8); // 80% of boundary radius
@@ -204,12 +290,12 @@ function animate() {
         direction.applyQuaternion(car.object.quaternion);
         
         // Create a new rocket and launch it
-        const newRocket = new Rocket(scene, soundManager);
+        const newRocket = new Rocket(scene, null); // No need to pass soundManager
         newRocket.launch(position, direction, car.speed);
         rockets.push(newRocket);
         
         // Play rocket sound
-        soundManager.playRocketSound();
+        playRocketSound();
         
         // Set cooldown to prevent rapid firing
         rocketCooldown = 1.5; // 1.5 seconds cooldown
@@ -255,6 +341,9 @@ function animate() {
     if (car) {
         // Update car based on input
         car.update(delta, input.keys, road);
+        
+        // Update car sound
+        updateCarSound(car.speed, car.isAccelerating, car.isBraking);
 
         // Update camera to follow car
         cameraTarget.position.copy(car.object.position);
@@ -276,8 +365,8 @@ function animate() {
 
 // Function to update enemy vehicles
 function updateEnemyVehicles(delta) {
-    // Only update one vehicle per frame to prevent lag
-    const maxUpdatesPerFrame = 1; // Reduced from 3 to 1
+    // Only update a subset of vehicles per frame to prevent lag
+    const maxUpdatesPerFrame = 5; // Increased from 1 to 5 since we have more vehicles
     let updatesThisFrame = 0;
     
     // Update each enemy vehicle
@@ -291,8 +380,7 @@ function updateEnemyVehicles(delta) {
                 enemyVehicles[i].dispose();
                 enemyVehicles.splice(i, 1);
                 
-                // Create a new enemy vehicle to replace the destroyed one, but only if we're below the max count
-                // This helps prevent lag spikes from creating too many vehicles at once
+                // Create a new enemy vehicle to replace the destroyed one
                 if (car && enemyVehicles.length < ENEMY_COUNT) {
                     // Delay creation of new vehicles to prevent lag spikes
                     setTimeout(() => {
@@ -313,10 +401,16 @@ function updateEnemyVehicles(delta) {
                 }
             }
         } 
-        // For non-destroyed vehicles, limit updates per frame and skip frames
-        else if (updatesThisFrame < maxUpdatesPerFrame) {
-            // Only update every 3rd frame for better performance
-            if (i % 3 === Math.floor(Date.now() / 1000) % 3) {
+        // For non-destroyed vehicles, use a more efficient update strategy
+        else {
+            // Update based on distance from player and frame count
+            const frameOffset = i % 6; // Spread updates across 6 frames
+            const currentFrame = Math.floor(Date.now() / 16.67) % 6; // Assuming 60fps (16.67ms per frame)
+            
+            // Only update if it's this vehicle's turn or it's close to the player
+            const updateThisFrame = frameOffset === currentFrame;
+            
+            if (updateThisFrame && updatesThisFrame < maxUpdatesPerFrame) {
                 enemyVehicles[i].update(delta, car ? car.object.position : null);
                 updatesThisFrame++;
             }
@@ -331,27 +425,43 @@ function checkRocketEnemyCollisions(rocket) {
     // Get rocket position
     const rocketPosition = rocket.object.position;
     
-    // Check each enemy vehicle - limit to nearest enemies for performance
-    let nearestEnemies = [];
+    // Use spatial partitioning for more efficient collision detection
+    // Divide the world into a grid and only check vehicles in nearby grid cells
+    const gridSize = 20; // Size of each grid cell
+    const gridX = Math.floor(rocketPosition.x / gridSize);
+    const gridZ = Math.floor(rocketPosition.z / gridSize);
     
-    // First pass: find enemies that are potentially within range (rough check)
+    // Check vehicles in current and adjacent grid cells
+    const nearbyEnemies = [];
+    
+    // Loop through all enemies (in a real game, you'd use a spatial hash map)
     for (const enemy of enemyVehicles) {
         // Skip already destroyed enemies
         if (enemy.destroyed) continue;
         
-        // Quick distance check (squared distance for performance)
-        const dx = enemy.object.position.x - rocketPosition.x;
-        const dz = enemy.object.position.z - rocketPosition.z;
-        const distanceSquared = dx * dx + dz * dz;
+        // Get enemy grid position
+        const enemyGridX = Math.floor(enemy.object.position.x / gridSize);
+        const enemyGridZ = Math.floor(enemy.object.position.z / gridSize);
         
-        // If potentially within range (using a generous threshold), add to candidates
-        if (distanceSquared < 100) { // 10 units squared
-            nearestEnemies.push(enemy);
+        // Check if in adjacent cells (including diagonals)
+        if (Math.abs(enemyGridX - gridX) <= 1 && Math.abs(enemyGridZ - gridZ) <= 1) {
+            // Quick distance check (squared distance for performance)
+            const dx = enemy.object.position.x - rocketPosition.x;
+            const dz = enemy.object.position.z - rocketPosition.z;
+            const distanceSquared = dx * dx + dz * dz;
+            
+            // If potentially within range, add to candidates
+            if (distanceSquared < 100) { // 10 units squared
+                nearbyEnemies.push(enemy);
+                
+                // Limit the number of enemies to check
+                if (nearbyEnemies.length >= 5) break;
+            }
         }
     }
     
-    // Second pass: check actual collisions only for nearby enemies
-    for (const enemy of nearestEnemies) {
+    // Check actual collisions only for nearby enemies
+    for (const enemy of nearbyEnemies) {
         // Check if enemy is within explosion range
         if (enemy.checkCollision(rocketPosition, 6)) {
             // Explode the rocket
@@ -361,13 +471,68 @@ function checkRocketEnemyCollisions(rocket) {
             setTimeout(() => {
                 enemy.destroy(rocketPosition);
                 
-                // Play explosion sound
-                soundManager.playExplosionSound();
+                // Update kill count and show notification
+                updateKillCount();
+                
+                // Play explosion sound - simple approach
+                playExplosionSound();
             }, 50);
             
             // No need to check other enemies for this rocket
             break;
         }
+    }
+}
+
+// Function to update kill count and show notification
+function updateKillCount() {
+    try {
+        // Increment kill count
+        killCount++;
+        
+        // Update kill count display if element exists
+        if (killCountElement) {
+            killCountElement.textContent = killCount;
+        }
+        
+        // Check for kill streak
+        const currentTime = Date.now();
+        if (currentTime - lastKillTime < 5000) { // 5 seconds for streak
+            killStreakCount++;
+        } else {
+            killStreakCount = 1;
+        }
+        lastKillTime = currentTime;
+        
+        // Show appropriate notification based on streak
+        let message = '';
+        if (killStreakCount >= 5) {
+            message = 'RAMPAGE!';
+        } else if (killStreakCount >= 3) {
+            message = 'KILLING SPREE!';
+        } else if (killStreakCount === 2) {
+            message = 'DOUBLE KILL!';
+        } else {
+            message = 'ENEMY DESTROYED!';
+        }
+        
+        // Display notification if element exists
+        if (killNotificationElement) {
+            killNotificationElement.textContent = message;
+            killNotificationElement.classList.add('show');
+            
+            // Hide notification after a delay
+            setTimeout(() => {
+                if (killNotificationElement) {
+                    killNotificationElement.classList.remove('show');
+                }
+            }, 2000);
+        }
+        
+        // Log to console as fallback
+        console.log(`Kill count: ${killCount} - ${message}`);
+    } catch (error) {
+        console.error('Error updating kill count:', error);
     }
 }
 

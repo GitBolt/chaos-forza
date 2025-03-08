@@ -2,10 +2,11 @@ body {
 	margin: 0;
 	background-color: #000;
 	color: #fff;
-	font-family: Monospace;
+	font-family: 'Arial', sans-serif;
 	font-size: 13px;
 	line-height: 24px;
 	overscroll-behavior: none;
+	overflow: hidden;
 }
 
 a {
@@ -88,4 +89,109 @@ a, button, input, select {
 	background-color: #f00;
 	margin-top: 20px;
 	padding: 10px;
+}
+
+#container {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+/* Game UI Elements */
+#game-ui {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	pointer-events: none; /* Allow clicks to pass through to the game */
+	z-index: 10;
+}
+
+/* Game Title */
+#game-title {
+	position: absolute;
+	top: 20px;
+	left: 20px;
+	font-size: 24px;
+	font-weight: bold;
+	color: #ff6600;
+	text-shadow: 0 0 10px rgba(255, 102, 0, 0.7);
+	letter-spacing: 2px;
+}
+
+/* Kill Counter */
+#kill-counter {
+	position: absolute;
+	top: 20px;
+	right: 20px;
+	font-size: 18px;
+	font-weight: bold;
+	color: #fff;
+	background-color: rgba(0, 0, 0, 0.5);
+	padding: 10px 15px;
+	border-radius: 5px;
+	border: 1px solid #ff6600;
+}
+
+#kill-count {
+	color: #ff6600;
+	font-size: 24px;
+}
+
+/* Kill Notification */
+#kill-notification {
+	position: absolute;
+	top: 40%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 28px;
+	font-weight: bold;
+	color: #ff6600;
+	text-shadow: 0 0 15px rgba(255, 102, 0, 0.9);
+	opacity: 0;
+	transition: opacity 0.3s, transform 0.3s;
+}
+
+#kill-notification.show {
+	opacity: 1;
+	transform: translate(-50%, -50%) scale(1.2);
+}
+
+/* Controls Guide */
+#controls-guide {
+	position: absolute;
+	bottom: 20px;
+	right: 20px;
+	background-color: rgba(0, 0, 0, 0.5);
+	padding: 10px;
+	border-radius: 5px;
+	border: 1px solid #ff6600;
+}
+
+.control-item {
+	margin: 5px 0;
+	font-size: 14px;
+	color: #fff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+	#game-title {
+		font-size: 20px;
+	}
+	
+	#kill-counter {
+		font-size: 16px;
+	}
+	
+	#kill-count {
+		font-size: 20px;
+	}
+	
+	#kill-notification {
+		font-size: 24px;
+	}
+	
+	.control-item {
+		font-size: 12px;
+	}
 } 

@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import { RocketParticles } from './rocketParticles.js';
 
 export class Rocket {
-    constructor(scene, soundManager) {
+    constructor(scene) {
         this.scene = scene;
-        this.soundManager = soundManager;
         this.object = new THREE.Object3D();
         this.speed = 0;
         this.maxSpeed = 15; // Increased max speed

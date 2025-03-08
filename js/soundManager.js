@@ -2,27 +2,40 @@ import * as THREE from 'three';
 
 export class SoundManager {
     constructor() {
-        // Create an audio listener
-        this.listener = new THREE.AudioListener();
-        
-        // Create audio objects
-        this.rocketSound = new THREE.Audio(this.listener);
-        this.carSound = new THREE.Audio(this.listener);
-        this.explosionSound = new THREE.Audio(this.listener);
-        
-        // Audio loader
-        this.audioLoader = new THREE.AudioLoader();
-        
-        // Load sounds
-        this.loadSounds();
+        try {
+            console.log('Initializing sound manager');
+            
+            // Create an audio listener
+            this.listener = new THREE.AudioListener();
+            
+            // Create audio objects
+            this.rocketSound = new THREE.Audio(this.listener);
+            this.carSound = new THREE.Audio(this.listener);
+            this.explosionSound = new THREE.Audio(this.listener);
+            
+            // Audio loader
+            this.audioLoader = new THREE.AudioLoader();
+            
+            // Load sounds
+            this.loadSounds();
+            
+            console.log('Sound manager initialized successfully');
+        } catch (error) {
+            console.error('Error initializing sound manager:', error);
+        }
     }
     
     loadSounds() {
+        // Flag to track if we've attempted to load the explosion sound
+        this.explosionSoundAttempted = false;
+        
         // Load rocket sound
         this.audioLoader.load('sound/rocket.mp3', (buffer) => {
             this.rocketSound.setBuffer(buffer);
             this.rocketSound.setLoop(false);
             this.rocketSound.setVolume(0.5);
+        }, undefined, (error) => {
+            console.warn('Failed to load rocket sound:', error);
         });
         
         // Load car sound
@@ -30,10 +43,20 @@ export class SoundManager {
             this.carSound.setBuffer(buffer);
             this.carSound.setLoop(true);
             this.carSound.setVolume(0.3);
+        }, undefined, (error) => {
+            console.warn('Failed to load car sound:', error);
         });
         
         // Load explosion sound
+        this.loadExplosionSound();
+    }
+    
+    loadExplosionSound() {
+        // Mark that we've attempted to load the explosion sound
+        this.explosionSoundAttempted = true;
+        
         this.audioLoader.load('sound/explosion.mp3', (buffer) => {
+            console.log('Explosion sound loaded successfully');
             this.explosionSound.setBuffer(buffer);
             this.explosionSound.setLoop(false);
             this.explosionSound.setVolume(0.7);
@@ -45,24 +68,37 @@ export class SoundManager {
     }
     
     createFallbackExplosionSound() {
-        // Create a buffer for a simple explosion sound
-        const context = this.listener.context;
-        const sampleRate = context.sampleRate;
-        const duration = 1; // 1 second
-        const numChannels = 1;
-        const length = sampleRate * duration;
-        const buffer = context.createBuffer(numChannels, length, sampleRate);
-        const data = buffer.getChannelData(0);
-        
-        // Generate noise with decay for explosion effect
-        for (let i = 0; i < length; i++) {
-            const t = i / sampleRate;
-            const decay = Math.exp(-5 * t);
-            data[i] = (Math.random() * 2 - 1) * decay;
+        try {
+            console.log('Creating fallback explosion sound');
+            
+            // Check if the audio context is available
+            if (!this.listener || !this.listener.context) {
+                console.warn('Audio context not available for fallback sound');
+                return;
+            }
+            
+            // Create a buffer for a simple explosion sound
+            const context = this.listener.context;
+            const sampleRate = context.sampleRate;
+            const duration = 1; // 1 second
+            const numChannels = 1;
+            const length = sampleRate * duration;
+            const buffer = context.createBuffer(numChannels, length, sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Generate noise with decay for explosion effect
+            for (let i = 0; i < length; i++) {
+                const t = i / sampleRate;
+                const decay = Math.exp(-5 * t);
+                data[i] = (Math.random() * 2 - 1) * decay;
+            }
+            
+            // Set the buffer
+            this.explosionSound.setBuffer(buffer);
+            console.log('Fallback explosion sound created successfully');
+        } catch (error) {
+            console.error('Error creating fallback explosion sound:', error);
         }
-        
-        // Set the buffer
-        this.explosionSound.setBuffer(buffer);
     }
     
     playRocketSound() {
@@ -73,14 +109,47 @@ export class SoundManager {
     }
     
     playExplosionSound() {
-        // Create a clone of the explosion sound to allow multiple explosions at once
-        const explosionInstance = this.explosionSound.clone();
-        explosionInstance.play();
+        // Check if the explosion sound and listener are properly initialized
+        if (!this.explosionSound || !this.listener || !this.listener.context) {
+            console.warn('Sound system not fully initialized, skipping explosion sound');
+            return;
+        }
         
-        // Clean up the instance after it's done playing
-        setTimeout(() => {
-            explosionInstance.disconnect();
-        }, 2000); // 2 seconds should be enough for most explosion sounds
+        try {
+            // Create a clone of the explosion sound to allow multiple explosions at once
+            const explosionInstance = this.explosionSound.clone();
+            
+            // Make sure the explosion sound has a buffer
+            if (!this.explosionSound.buffer) {
+                console.warn('Explosion sound buffer not loaded yet, creating fallback sound');
+                this.createFallbackExplosionSound();
+                
+                // If we still don't have a buffer, return
+                if (!this.explosionSound.buffer) {
+                    console.warn('Could not create fallback explosion sound');
+                    return;
+                }
+                
+                // Set the buffer for the instance
+                explosionInstance.setBuffer(this.explosionSound.buffer);
+            }
+            
+            // Play the sound
+            explosionInstance.play();
+            
+            // Clean up the instance after it's done playing
+            setTimeout(() => {
+                try {
+                    if (explosionInstance) {
+                        explosionInstance.disconnect();
+                    }
+                } catch (error) {
+                    console.warn('Error disconnecting explosion sound:', error);
+                }
+            }, 2000); // 2 seconds should be enough for most explosion sounds
+        } catch (error) {
+            console.warn('Error playing explosion sound:', error);
+        }
     }
     
     updateCarSound(speed, isAccelerating, isBraking) {
