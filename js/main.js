@@ -13,7 +13,7 @@ let car;
 let road;
 let input;
 let sky;
-let rocket;
+let rockets = []; // Array to store multiple rockets
 let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
 
@@ -85,7 +85,7 @@ input = new InputHandler();
 road = new Road(scene);
 
 // Initialize the rocket
-rocket = new Rocket(scene);
+// rocket = new Rocket(scene);
 
 // Initialize the car
 const carObject = new THREE.Object3D();
@@ -162,24 +162,31 @@ function animate() {
 
     // Check for space key to launch rocket
     if (input.keys[' '] && rocketCooldown <= 0 && car) {
-        // Get car position
+        // Get car position - ensure we're getting the complete position with height
         const position = car.object.position.clone();
         
         // Get forward direction from car - this is the direction the car is facing
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(car.object.quaternion);
         
-        // Launch rocket in the forward direction of the car
-        // Pass the car's current speed to the rocket
-        rocket.launch(position, direction, car.speed);
+        // Create a new rocket and launch it
+        const newRocket = new Rocket(scene);
+        newRocket.launch(position, direction, car.speed);
+        rockets.push(newRocket);
         
         // Set cooldown to prevent rapid firing
-        rocketCooldown = 0.5; // 0.5 seconds cooldown
+        rocketCooldown = 1.5; // 1.5 seconds cooldown
     }
 
-    // Update rocket
-    if (rocket) {
-        rocket.update(delta);
+    // Update all rockets
+    for (let i = rockets.length - 1; i >= 0; i--) {
+        rockets[i].update(delta);
+        
+        // Remove exploded rockets that have completed their animation
+        if (rockets[i].exploded && rockets[i].explosionComplete) {
+            rockets[i].dispose();
+            rockets.splice(i, 1);
+        }
     }
 
     if (mixer) {
