@@ -50,14 +50,14 @@ export class EnemyVehicle {
     loadModel() {
         const loader = new GLTFLoader();
         
-        loader.load('agera.glb', (gltf) => {
+        loader.load('mclaren.glb', (gltf) => {
             this.model = gltf.scene;
             
             // Scale and position the model - reduce size to 0.2 of original (was 0.25)
             // Further reduce size on mobile for better performance
-            const scale = isMobile ? 0.15 : 0.2;
+            const scale = isMobile ? 1:1
             this.model.scale.set(scale, scale, scale);
-            
+            this.model.rotation.y = Math.PI;
             // Apply materials
             this.applyMaterials();
             
