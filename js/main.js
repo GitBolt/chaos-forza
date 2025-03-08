@@ -8,6 +8,158 @@ import { SkyDome } from './sky.js';
 import { Rocket } from './rocket.js';
 import { EnemyVehicle } from './enemyVehicle.js';
 
+// Loading screen handling
+let loadingScreen;
+let loadingBar;
+let loadingText;
+
+// Initialize loading screen
+document.addEventListener('DOMContentLoaded', () => {
+    loadingScreen = document.getElementById('loading-screen');
+    loadingBar = document.getElementById('loading-bar');
+    loadingText = document.getElementById('loading-text');
+    
+    // Animate loading bar
+    let progress = 0;
+    const loadingInterval = setInterval(() => {
+        progress += 2; // Increment by 2% each time
+        if (progress > 100) {
+            progress = 100;
+            clearInterval(loadingInterval);
+            
+            // Hide loading screen after 5 seconds total
+            setTimeout(() => {
+                loadingScreen.classList.add('fade-out');
+                setTimeout(() => {
+                    loadingScreen.style.display = 'none';
+                }, 500); // Wait for fade-out animation to complete
+            }, 5000 - (progress * 50)); // Adjust remaining time to total 5 seconds
+        }
+        
+        // Update loading bar and text
+        loadingBar.style.width = progress + '%';
+        loadingText.textContent = `Loading game assets... ${Math.floor(progress)}%`;
+    }, 100); // Update every 100ms
+});
+
+// Memory management - texture cache to avoid duplicate loading
+const textureCache = new Map();
+
+// Texture loader with cache
+function loadTextureWithCache(path) {
+    if (textureCache.has(path)) {
+        return textureCache.get(path);
+    }
+    
+    const texture = new THREE.TextureLoader().load(path);
+    textureCache.set(path, texture);
+    return texture;
+}
+
+// Function to optimize textures based on device capability
+function optimizeTexture(texture, isLowQuality = false) {
+    // Only apply low quality settings to mobile devices
+    if (isLowQuality && isMobile) {
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.anisotropy = 1;
+    } else {
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = true;
+        texture.anisotropy = 4;
+    }
+    
+    return texture;
+}
+
+// Device detection for performance optimization - only detect mobile
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isLowEndMobile = isMobile && (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+
+// Check for user-defined quality settings in localStorage
+const userQualityPreset = localStorage.getItem('qualityPreset');
+const userShadowQuality = localStorage.getItem('shadowQuality');
+const userEnemyCount = localStorage.getItem('enemyCount');
+
+// Performance settings based on device capability
+const QUALITY = {
+    LOW: {
+        pixelRatio: 0.5,
+        enemyCount: 10,
+        shadowMapEnabled: false,
+        antialias: false,
+        maxUpdatesPerFrame: 2,
+        drawDistance: 300,
+        targetFPS: 30
+    },
+    MEDIUM: {
+        pixelRatio: 0.75,
+        enemyCount: 20,
+        shadowMapEnabled: true,
+        shadowMapType: THREE.BasicShadowMap,
+        antialias: false,
+        maxUpdatesPerFrame: 3,
+        drawDistance: 500,
+        targetFPS: 60
+    },
+    HIGH: {
+        pixelRatio: window.devicePixelRatio,
+        enemyCount: 40,
+        shadowMapEnabled: true,
+        shadowMapType: THREE.PCFSoftShadowMap,
+        antialias: true,
+        maxUpdatesPerFrame: 5,
+        drawDistance: 1000,
+        targetFPS: 60
+    }
+};
+
+// Select quality preset based on device and user settings
+let qualitySettings;
+
+if (userQualityPreset === 'low') {
+    qualitySettings = QUALITY.LOW;
+} else if (userQualityPreset === 'medium') {
+    qualitySettings = QUALITY.MEDIUM;
+} else if (userQualityPreset === 'high') {
+    qualitySettings = QUALITY.HIGH;
+} else {
+    // Auto detect based on device
+    qualitySettings = isLowEndMobile ? QUALITY.LOW : (isMobile ? QUALITY.MEDIUM : QUALITY.HIGH);
+}
+
+// Override specific settings if user has set them
+if (userShadowQuality === 'off') {
+    qualitySettings.shadowMapEnabled = false;
+} else if (userShadowQuality === 'low') {
+    qualitySettings.shadowMapEnabled = true;
+    qualitySettings.shadowMapType = THREE.BasicShadowMap;
+} else if (userShadowQuality === 'high') {
+    qualitySettings.shadowMapEnabled = true;
+    qualitySettings.shadowMapType = THREE.PCFSoftShadowMap;
+}
+
+if (userEnemyCount) {
+    qualitySettings.enemyCount = parseInt(userEnemyCount);
+}
+
+console.log("Device detected as:", isMobile ? "Mobile" : "Desktop", "- Quality:", 
+    userQualityPreset || (isLowEndMobile ? "LOW" : (isMobile ? "MEDIUM" : "HIGH")));
+
+// Listen for quality settings changes from UI
+window.addEventListener('qualitySettingsChanged', (event) => {
+    const { qualityPreset, shadowQuality, enemyCount } = event.detail;
+    
+    // Save settings to localStorage
+    localStorage.setItem('qualityPreset', qualityPreset);
+    localStorage.setItem('shadowQuality', shadowQuality);
+    localStorage.setItem('enemyCount', enemyCount);
+    
+    console.log("Quality settings changed:", qualityPreset, shadowQuality, enemyCount);
+});
+
 // Game variables
 let mixer;
 let car;
@@ -18,8 +170,8 @@ let rockets = []; // Array to store multiple rockets
 let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
 let enemyVehicles = []; // Array to store enemy vehicles
-const ENEMY_COUNT = 40; // Increased from 3 to 40 as requested
-const ENEMY_SPAWN_BATCH_SIZE = 5; // Spawn enemies in batches to prevent lag
+const ENEMY_COUNT = qualitySettings.enemyCount; // Adjusted based on device capability
+const ENEMY_SPAWN_BATCH_SIZE = Math.min(5, Math.ceil(ENEMY_COUNT / 8)); // Spawn enemies in batches to prevent lag
 let enemySpawnTimer = 0; // Timer for spawning enemy batches
 
 // UI variables
@@ -106,6 +258,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     `;
     document.head.appendChild(style);
+    
+    // Hide quality settings button - as requested by user
+    const qualityButton = document.getElementById('quality-settings');
+    if (qualityButton) {
+        qualityButton.style.display = 'none';
+    }
+    
+    // Auto-show mobile controls on mobile devices
+    const mobileControls = document.getElementById('mobile-controls');
+    if (isMobile && mobileControls) {
+        mobileControls.style.display = 'block';
+    }
 });
 
 // Three.js setup
@@ -113,14 +277,17 @@ const clock = new THREE.Clock();
 const container = document.getElementById('container');
 
 const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: "high-performance"
+    antialias: !isMobile, // Only disable on mobile
+    powerPreference: "high-performance",
+    precision: isMobile ? "mediump" : "highp", // Lower precision only on mobile
+    stencil: false, // Disable stencil buffer if not needed
+    depth: true
 });
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-// Enable shadows
+// Enable shadows - only reduce quality on mobile
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
 // Enable physically correct lighting
 renderer.physicallyCorrectLights = true;
 // Enable tone mapping for better HDR visibility
@@ -133,8 +300,9 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.sortObjects = true; // Enable sorting for better rendering order
 renderer.autoClear = true; // Changed from false to true - let Three.js handle clearing
 
-// Create depth material for pre-pass (not using it for now as it might cause issues)
-// const depthMaterial = new THREE.MeshDepthMaterial();
+// Create a frustum for culling objects outside the camera view
+const frustum = new THREE.Frustum();
+const cameraViewProjectionMatrix = new THREE.Matrix4();
 
 container.appendChild(renderer.domElement);
 
@@ -149,8 +317,8 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7); // Lower int
 directionalLight.position.set(0, 1, 0); // Overhead position
 directionalLight.castShadow = true;
 // Set up shadow properties
-directionalLight.shadow.mapSize.width = 2048;
-directionalLight.shadow.mapSize.height = 2048;
+directionalLight.shadow.mapSize.width = isMobile ? 1024 : 2048;
+directionalLight.shadow.mapSize.height = isMobile ? 1024 : 2048;
 directionalLight.shadow.camera.near = 0.5;
 directionalLight.shadow.camera.far = 50;
 directionalLight.shadow.camera.left = -20;
@@ -175,9 +343,6 @@ input = new InputHandler();
 // Create road
 road = new Road(scene);
 
-// Initialize the rocket
-// rocket = new Rocket(scene);
-
 // Initialize the car
 const carObject = new THREE.Object3D();
 scene.add(carObject);
@@ -188,6 +353,45 @@ dracoLoader.setDecoderPath('https://unpkg.com/three@0.154.0/examples/jsm/libs/dr
 
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
+
+// Create a texture cache cleaner
+function cleanupUnusedTextures() {
+    // This function should be called periodically to free memory
+    // It checks if textures are still in use and removes them from cache if not
+    
+    // Get all materials in the scene
+    const materialsInUse = new Set();
+    scene.traverse((object) => {
+        if (object.material) {
+            if (Array.isArray(object.material)) {
+                object.material.forEach(mat => {
+                    if (mat.map) materialsInUse.add(mat.map);
+                    if (mat.normalMap) materialsInUse.add(mat.normalMap);
+                    if (mat.roughnessMap) materialsInUse.add(mat.roughnessMap);
+                    if (mat.metalnessMap) materialsInUse.add(mat.metalnessMap);
+                });
+            } else {
+                if (object.material.map) materialsInUse.add(object.material.map);
+                if (object.material.normalMap) materialsInUse.add(object.material.normalMap);
+                if (object.material.roughnessMap) materialsInUse.add(object.material.roughnessMap);
+                if (object.material.metalnessMap) materialsInUse.add(object.material.metalnessMap);
+            }
+        }
+    });
+    
+    // Remove textures that are not in use
+    for (const [path, texture] of textureCache.entries()) {
+        if (!materialsInUse.has(texture)) {
+            texture.dispose();
+            textureCache.delete(path);
+        }
+    }
+}
+
+// Set up periodic texture cleanup - only on mobile
+if (isMobile) {
+    setInterval(cleanupUnusedTextures, 30000); // Every 30 seconds
+}
 
 // Load car model
 loader.load('car.glb', function (gltf) {
@@ -200,6 +404,11 @@ loader.load('car.glb', function (gltf) {
         if (object.isMesh) {
             object.castShadow = true;
             object.receiveShadow = true;
+            
+            // Optimize textures only on mobile
+            if (object.material && object.material.map && isMobile) {
+                object.material.map = optimizeTexture(object.material.map, isMobile);
+            }
         }
     });
 
@@ -232,7 +441,8 @@ loader.load('car.glb', function (gltf) {
     // Create enemy vehicles after player car is loaded
     createEnemyVehicles();
 
-    renderer.setAnimationLoop(animate);
+    // Start animation loop
+    animate();
 
 }, undefined, function (e) {
     console.error(e);
@@ -284,6 +494,8 @@ function spawnEnemyBatch(batchSize) {
 
 // Animation loop
 function animate() {
+    requestAnimationFrame(animate);
+    
     const delta = clock.getDelta();
 
     // Update rocket cooldown
@@ -328,7 +540,7 @@ function animate() {
             rockets.splice(i, 1);
             
             // Limit the number of active rockets to prevent memory issues
-            if (rockets.length > 10) {
+            if (rockets.length > (isMobile ? 5 : 10)) {
                 // If we have too many rockets, remove the oldest ones
                 const oldRocket = rockets.shift();
                 oldRocket.dispose();
@@ -377,8 +589,13 @@ function animate() {
 // Function to update enemy vehicles
 function updateEnemyVehicles(delta) {
     // Only update a subset of vehicles per frame to prevent lag
-    const maxUpdatesPerFrame = 5; // Increased from 1 to 5 since we have more vehicles
+    const maxUpdatesPerFrame = isMobile ? 3 : 5;
     let updatesThisFrame = 0;
+    
+    // Update camera frustum for culling
+    camera.updateMatrixWorld();
+    cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
     
     // Update each enemy vehicle
     for (let i = enemyVehicles.length - 1; i >= 0; i--) {
@@ -414,12 +631,20 @@ function updateEnemyVehicles(delta) {
         } 
         // For non-destroyed vehicles, use a more efficient update strategy
         else {
-            // Update based on distance from player and frame count
+            // Create a sphere for frustum culling check
+            const enemyPosition = enemyVehicles[i].object.position;
+            const boundingSphere = new THREE.Sphere(enemyPosition, 5);
+            
+            // Only update if in frustum or close to player
+            const inFrustum = frustum.intersectsSphere(boundingSphere);
+            const closeToPlayer = car && enemyPosition.distanceTo(car.object.position) < (isMobile ? 500 : 1000);
+            
+            // Update based on distance from player, frame count, and frustum culling
             const frameOffset = i % 6; // Spread updates across 6 frames
             const currentFrame = Math.floor(Date.now() / 16.67) % 6; // Assuming 60fps (16.67ms per frame)
             
-            // Only update if it's this vehicle's turn or it's close to the player
-            const updateThisFrame = frameOffset === currentFrame;
+            // Only update if it's this vehicle's turn or it's close to the player and in view
+            const updateThisFrame = (frameOffset === currentFrame) && (inFrustum || closeToPlayer);
             
             if (updateThisFrame && updatesThisFrame < maxUpdatesPerFrame) {
                 enemyVehicles[i].update(delta, car ? car.object.position : null);
@@ -556,17 +781,3 @@ function updateKillCount() {
         console.error('Error updating kill count:', error);
     }
 }
-
-// Render with depth pre-pass for better performance - disabled for now
-// function renderWithDepthPrePass() {
-//     // Clear both the color and depth buffers
-//     renderer.clear();
-// 
-//     // 1. Render depth only
-//     scene.overrideMaterial = depthMaterial;
-//     renderer.render(scene, camera);
-// 
-//     // 2. Render scene normally, using the depth information from the previous pass
-//     scene.overrideMaterial = null;
-//     renderer.render(scene, camera);
-// }

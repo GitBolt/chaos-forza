@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+// Device detection for performance optimization
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 export class EnemyVehicle {
     constructor(scene, position, road) {
         this.scene = scene;
@@ -51,18 +54,22 @@ export class EnemyVehicle {
             this.model = gltf.scene;
             
             // Scale and position the model - reduce size to 0.2 of original (was 0.25)
-            this.model.scale.set(0.2, 0.2, 0.2);
+            // Further reduce size on mobile for better performance
+            const scale = isMobile ? 0.15 : 0.2;
+            this.model.scale.set(scale, scale, scale);
             
             // Apply materials
             this.applyMaterials();
             
-            // Enable shadows
-            this.model.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
+            // Enable shadows only on higher-end devices
+            if (!isMobile) {
+                this.model.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+            }
             
             // Add model to object
             this.object.add(this.model);
@@ -79,17 +86,25 @@ export class EnemyVehicle {
                 // Create a copy of the original material to preserve textures
                 const originalMaterial = child.material;
                 
-                // Create a simpler material with lower quality settings
-                const material = new THREE.MeshStandardMaterial({
-                    map: originalMaterial.map,
-                    color: originalMaterial.color || new THREE.Color(0x888888),
-                    metalness: 0.6,
-                    roughness: 0.4,
-                    // Remove environment maps and complex properties for performance
-                });
-                
-                // Apply the new material
-                child.material = material;
+                // Create an even simpler material for mobile devices
+                if (isMobile) {
+                    const basicMaterial = new THREE.MeshBasicMaterial({
+                        map: originalMaterial.map,
+                        color: originalMaterial.color || new THREE.Color(0x888888),
+                        // No lighting calculations for maximum performance
+                    });
+                    child.material = basicMaterial;
+                } else {
+                    // Standard material for better devices
+                    const material = new THREE.MeshStandardMaterial({
+                        map: originalMaterial.map,
+                        color: originalMaterial.color || new THREE.Color(0x888888),
+                        metalness: 0.6,
+                        roughness: 0.4,
+                        // Remove environment maps and complex properties for performance
+                    });
+                    child.material = material;
+                }
             }
         });
     }
@@ -189,12 +204,17 @@ export class EnemyVehicle {
         // Mark explosion as complete after a short delay
         setTimeout(() => {
             this.explosionComplete = true;
-        }, 500);
+        }, isMobile ? 300 : 500); // Shorter explosion time on mobile
     }
     
     createSimpleExplosion(position) {
         // Create an enhanced flash effect
         this.createFlashEffect(position);
+        
+        // Skip additional explosion effects on mobile devices
+        if (isMobile) {
+            return;
+        }
         
         // Create a single explosion sphere
         const explosionGeometry = new THREE.SphereGeometry(3, 8, 8);
@@ -228,13 +248,20 @@ export class EnemyVehicle {
     }
     
     createFlashEffect(position) {
-        // Create a flash light
-        const flashLight = new THREE.PointLight(0xffaa00, 10, 15);
-        flashLight.position.copy(position);
-        this.scene.add(flashLight);
+        // Create a flash light - only on desktop
+        if (!isMobile) {
+            const flashLight = new THREE.PointLight(0xffaa00, 10, 15);
+            flashLight.position.copy(position);
+            this.scene.add(flashLight);
+            
+            // Reduce light intensity quickly
+            setTimeout(() => {
+                this.scene.remove(flashLight);
+            }, 100);
+        }
         
-        // Create a visual flash sphere
-        const flashGeometry = new THREE.SphereGeometry(2, 8, 8);
+        // Create a visual flash sphere - simpler on mobile
+        const flashGeometry = new THREE.SphereGeometry(2, isMobile ? 4 : 8, isMobile ? 4 : 8);
         const flashMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffaa,
             transparent: true,
@@ -246,28 +273,26 @@ export class EnemyVehicle {
         flashSphere.position.copy(position);
         this.scene.add(flashSphere);
         
-        // Animate the flash
+        // Animate the flash - simpler animation on mobile
         let flashScale = 0.1;
         let intensity = 10;
         
         const animateFlash = () => {
             // Expand flash sphere
-            flashScale += 0.2;
+            flashScale += isMobile ? 0.3 : 0.2;
             flashSphere.scale.set(flashScale, flashScale, flashScale);
             
             // Fade out flash sphere
-            flashMaterial.opacity -= 0.1;
+            flashMaterial.opacity -= isMobile ? 0.2 : 0.1;
             
             // Reduce light intensity
             intensity *= 0.8;
-            flashLight.intensity = intensity;
             
             if (flashMaterial.opacity > 0.05) {
                 requestAnimationFrame(animateFlash);
             } else {
                 // Clean up
                 this.scene.remove(flashSphere);
-                this.scene.remove(flashLight);
                 flashGeometry.dispose();
                 flashMaterial.dispose();
             }

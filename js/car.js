@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+// Device detection for performance optimization
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 export class Car {
     constructor(object, model) {
         this.object = object;
@@ -9,7 +12,7 @@ export class Car {
         // this.model.rotation.y = Math.PI;
         
         // Make the car shiny by updating its materials
-        this.applyShinyMaterials();
+        this.applyMaterials();
         
         // Physics properties
         this.speed = 0;
@@ -45,6 +48,38 @@ export class Car {
         this.pitchAngle = 0;
         this.pitchVelocity = 0;
         this.pitchDamping = 0.08; // Slightly reduced for more oscillation
+    }
+    
+    applyMaterials() {
+        if (isMobile) {
+            this.applySimpleMaterials();
+        } else {
+            this.applyShinyMaterials();
+        }
+    }
+    
+    applySimpleMaterials() {
+        console.log("Applying optimized materials for mobile device");
+        
+        // Apply simple materials to the car for better performance
+        this.model.traverse((child) => {
+            if (child.isMesh) {
+                // Create a copy of the original material to preserve textures
+                const originalMaterial = child.material;
+                
+                // Create a simpler material with lower quality settings
+                const simpleMaterial = new THREE.MeshStandardMaterial({
+                    map: originalMaterial.map,
+                    color: originalMaterial.color || new THREE.Color(0x888888),
+                    metalness: 0.6,
+                    roughness: 0.4,
+                    // No environment maps or complex properties for performance
+                });
+                
+                // Apply the new material
+                child.material = simpleMaterial;
+            }
+        });
     }
     
     applyShinyMaterials() {
