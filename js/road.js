@@ -267,9 +267,17 @@ export class Road {
         const segmentCount = 64; // Increased from 32 to 64 for smoother boundary
         const segmentAngle = (Math.PI * 2) / segmentCount;
         
+        // Load wall texture
+        const textureLoader = new THREE.TextureLoader();
+        const wallTexture = textureLoader.load('textures/wall.jpg');
+        wallTexture.wrapS = THREE.RepeatWrapping;
+        wallTexture.wrapT = THREE.RepeatWrapping;
+        wallTexture.repeat.set(16, 2); // Adjust repeat values as needed for proper scaling
+        
         // Create a material for the boundary wall - make it opaque
         const wallMaterial = new THREE.MeshStandardMaterial({
-            color: 0x444444,
+            map: wallTexture,
+            color: 0xffffff, // Use white color to show texture properly
             roughness: 0.7,
             metalness: 0.3,
             side: THREE.DoubleSide,
@@ -288,6 +296,14 @@ export class Road {
             0, // start angle
             Math.PI * 2 // end angle - full circle
         );
+        
+        // Adjust UV mapping for better texture distribution on cylinder
+        const uvs = wallGeometry.attributes.uv.array;
+        for (let i = 0; i < uvs.length; i += 2) {
+            // Scale U coordinate based on circumference for proper horizontal tiling
+            uvs[i] = uvs[i] * 16;
+        }
+        wallGeometry.attributes.uv.needsUpdate = true;
         
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
         wall.position.y = this.boundaryHeight / 2; // Position so bottom is at ground level
