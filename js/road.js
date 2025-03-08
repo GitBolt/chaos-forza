@@ -8,11 +8,18 @@ export class Road {
         this.roadWidth = 20;
         this.totalSegments = 5;
         
+        // Add circular boundary properties
+        this.boundaryRadius = 1000; // Doubled from 500 to 1000
+        this.boundaryHeight = 10; // Height of the boundary wall
+        
         // Create materials
         this.createMaterials();
         
         // Create initial road segments
         this.createRoadSegments();
+        
+        // Create circular boundary and ground
+        this.createCircularBoundary();
     }
     
     createMaterials() {
@@ -160,6 +167,135 @@ export class Road {
         
         this.segments.push(segment);
         return segment;
+    }
+    
+    createCircularBoundary() {
+        // Create a large circular ground plane
+        const groundGeometry = new THREE.CircleGeometry(this.boundaryRadius, 64);
+        const ground = new THREE.Mesh(groundGeometry, this.grassMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.1; // Slightly below the road to avoid z-fighting
+        ground.receiveShadow = true;
+        this.scene.add(ground);
+        
+        // Create a boundary wall
+        const wallGeometry = new THREE.CylinderGeometry(
+            this.boundaryRadius, // top radius
+            this.boundaryRadius + 5, // bottom radius slightly larger for a slope effect
+            this.boundaryHeight, // height
+            64, // radial segments
+            2, // height segments
+            true // open-ended
+        );
+        
+        // Create a material for the boundary wall
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0x444444,
+            roughness: 0.7,
+            metalness: 0.3,
+            side: THREE.DoubleSide, // Render both sides
+            transparent: true,
+            opacity: 0.8 // Semi-transparent
+        });
+        
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.y = this.boundaryHeight / 2; // Position so bottom is at ground level
+        this.scene.add(wall);
+        
+        // Add a glowing edge at the top of the wall
+        const edgeGeometry = new THREE.TorusGeometry(
+            this.boundaryRadius, // radius
+            0.5, // tube radius
+            16, // radial segments
+            64 // tubular segments
+        );
+        
+        const edgeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            emissive: 0x0088ff,
+            emissiveIntensity: 0.5,
+            roughness: 0.3,
+            metalness: 0.7
+        });
+        
+        const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+        edge.rotation.x = Math.PI / 2;
+        edge.position.y = this.boundaryHeight;
+        this.scene.add(edge);
+        
+        // Add decorative elements around the boundary
+        this.addBoundaryDecorations();
+        
+        // Add a helper to visualize the boundary (optional)
+        const circlePoints = [];
+        const segments = 64;
+        for (let i = 0; i <= segments; i++) {
+            const theta = (i / segments) * Math.PI * 2;
+            circlePoints.push(new THREE.Vector3(
+                Math.cos(theta) * this.boundaryRadius,
+                0,
+                Math.sin(theta) * this.boundaryRadius
+            ));
+        }
+        
+        const boundaryGeometry = new THREE.BufferGeometry().setFromPoints(circlePoints);
+        const boundaryHelper = new THREE.Line(
+            boundaryGeometry,
+            new THREE.LineBasicMaterial({ color: 0x00aaff, linewidth: 2 })
+        );
+        boundaryHelper.rotation.x = -Math.PI / 2;
+        boundaryHelper.position.y = 0.1; // Slightly above ground
+        this.scene.add(boundaryHelper);
+    }
+    
+    // Add decorative elements around the boundary
+    addBoundaryDecorations() {
+        // Add some decorative pillars around the boundary
+        const pillarCount = 32; // Doubled from 16 to 32 for the larger boundary
+        const pillarHeight = 15;
+        const pillarRadius = 3;
+        const pillarDistance = this.boundaryRadius - 5;
+        
+        // Create pillar geometry and material
+        const pillarGeometry = new THREE.CylinderGeometry(
+            pillarRadius, // top radius
+            pillarRadius * 1.5, // bottom radius
+            pillarHeight, // height
+            8, // radial segments
+            1 // height segments
+        );
+        
+        const pillarMaterial = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            roughness: 0.6,
+            metalness: 0.4
+        });
+        
+        // Create pillars around the boundary
+        for (let i = 0; i < pillarCount; i++) {
+            const angle = (i / pillarCount) * Math.PI * 2;
+            const x = Math.cos(angle) * pillarDistance;
+            const z = Math.sin(angle) * pillarDistance;
+            
+            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillar.position.set(x, pillarHeight / 2, z);
+            pillar.castShadow = true;
+            pillar.receiveShadow = true;
+            this.scene.add(pillar);
+            
+            // Add a light on top of each pillar
+            const light = new THREE.PointLight(0x00aaff, 0.8, 50);
+            light.position.set(x, pillarHeight + 1, z);
+            this.scene.add(light);
+        }
+    }
+    
+    // Add a method to check if a position is within the boundary
+    isWithinBoundary(position) {
+        // Calculate distance from center (0,0,0) to the position (x,z plane only)
+        const distance = Math.sqrt(position.x * position.x + position.z * position.z);
+        // Return true if within boundary, false otherwise
+        return distance < this.boundaryRadius - 5; // 5 units buffer
     }
     
     update(carPosition) {

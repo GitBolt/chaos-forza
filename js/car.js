@@ -28,6 +28,10 @@ export class Car {
         this.isReversing = false;
         this.isTurningLeft = false;
         this.isTurningRight = false;
+        
+        // Boundary check
+        this.boundaryRadius = 995; // Updated to match the doubled road boundary (1000 - 5)
+        this.lastValidPosition = new THREE.Vector3();
     }
     
     applyShinyMaterials() {
@@ -151,10 +155,29 @@ export class Car {
         this.direction.set(0, 0, -1);
         this.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.object.rotation.y);
         
+        // Store current position before moving
+        this.lastValidPosition.copy(this.object.position);
+        
         // Move car in the direction it's facing
         if (this.speed !== 0) {
             this.object.position.x += this.direction.x * this.speed;
             this.object.position.z += this.direction.z * this.speed;
+            
+            // Check if car is within boundary
+            if (!this.isWithinBoundary(this.object.position)) {
+                // If outside boundary, revert to last valid position
+                this.object.position.copy(this.lastValidPosition);
+                // Reduce speed to prevent getting stuck at the boundary
+                this.speed *= 0.5;
+            }
         }
+    }
+    
+    // Check if position is within the circular boundary
+    isWithinBoundary(position) {
+        // Calculate distance from center (0,0,0) to the position (x,z plane only)
+        const distance = Math.sqrt(position.x * position.x + position.z * position.z);
+        // Return true if within boundary, false otherwise
+        return distance < this.boundaryRadius;
     }
 } 

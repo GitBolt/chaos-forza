@@ -128,6 +128,9 @@ loader.load('car.glb', function (gltf) {
     // Initialize car physics and controls
     car = new Car(carObject, model);
 
+    // Set the car's boundary radius to match the road's boundary
+    car.boundaryRadius = road.boundaryRadius - 5; // 5 units buffer
+
     // Setup camera
     cameraTarget.position.copy(carObject.position);
     cameraTarget.position.y += 2;
