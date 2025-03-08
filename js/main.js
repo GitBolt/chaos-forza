@@ -5,6 +5,7 @@ import { Car } from './car.js';
 import { Road } from './road.js';
 import { InputHandler } from './input.js';
 import { SkyDome } from './sky.js';
+import { TreeManager } from './trees.js';
 
 // Game variables
 let mixer;
@@ -12,6 +13,7 @@ let car;
 let road;
 let input;
 let sky;
+let treeManager;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
 
 // Three.js setup
@@ -91,6 +93,9 @@ input = new InputHandler();
 
 // Create road
 road = new Road(scene);
+
+// Initialize tree manager after road is created
+treeManager = new TreeManager(scene, road);
 
 // Initialize the car
 const carObject = new THREE.Object3D();
@@ -194,7 +199,9 @@ function animate() {
         ));
         // Update road segments based on car position
         road.update(car.object.position);
-
+        
+        // Update trees based on car position
+        treeManager.updateTrees(car.object.position);
     }
 
     renderer.render(scene, camera);

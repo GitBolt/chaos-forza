@@ -91,7 +91,8 @@ export class Road {
     createSegment(zPosition) {
         const segment = {
             meshes: [],
-            position: new THREE.Vector3(0, 0, zPosition)
+            position: new THREE.Vector3(0, 0, zPosition),
+            wasRecycled: false
         };
         
         // Road
@@ -166,6 +167,9 @@ export class Road {
         for (let i = 0; i < this.segments.length; i++) {
             const segment = this.segments[i];
             
+            // Reset wasRecycled flag at the beginning of each update
+            segment.wasRecycled = false;
+            
             // If car has passed this segment by a certain distance
             if (carPosition.z < segment.position.z - this.roadLength * 1.5) {
                 // Find the furthest segment in the direction of travel
@@ -180,6 +184,9 @@ export class Road {
                 segment.meshes.forEach(mesh => {
                     mesh.position.z = newZ;
                 });
+                
+                // Mark segment as recycled
+                segment.wasRecycled = true;
             }
         }
     }
