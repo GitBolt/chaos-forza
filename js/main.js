@@ -6,6 +6,7 @@ import { Road } from './road.js';
 import { InputHandler } from './input.js';
 import { SkyDome } from './sky.js';
 import { Rocket } from './rocket.js';
+import { SoundManager } from './soundManager.js';
 
 // Game variables
 let mixer;
@@ -16,6 +17,7 @@ let sky;
 let rockets = []; // Array to store multiple rockets
 let rocketCooldown = 0;
 let timeOfDay = 0.78; // Evening time (matching sky.js)
+let soundManager; // Sound manager instance
 
 // Three.js setup
 const clock = new THREE.Clock();
@@ -98,6 +100,11 @@ dracoLoader.setDecoderPath('https://unpkg.com/three@0.154.0/examples/jsm/libs/dr
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 
+// Initialize sound manager
+soundManager = new SoundManager();
+// Add audio listener to camera
+camera.add(soundManager.listener);
+
 // Load car model
 loader.load('car.glb', function (gltf) {
     const model = gltf.scene;
@@ -116,7 +123,7 @@ loader.load('car.glb', function (gltf) {
     carObject.add(model);
 
     // Initialize car physics and controls
-    car = new Car(carObject, model);
+    car = new Car(carObject, model, soundManager);
 
     // Set the car's boundary radius to match the road's boundary
     car.boundaryRadius = road.boundaryRadius - 5; // 5 units buffer
@@ -170,9 +177,12 @@ function animate() {
         direction.applyQuaternion(car.object.quaternion);
         
         // Create a new rocket and launch it
-        const newRocket = new Rocket(scene);
+        const newRocket = new Rocket(scene, soundManager);
         newRocket.launch(position, direction, car.speed);
         rockets.push(newRocket);
+        
+        // Play rocket sound
+        soundManager.playRocketSound();
         
         // Set cooldown to prevent rapid firing
         rocketCooldown = 1.5; // 1.5 seconds cooldown

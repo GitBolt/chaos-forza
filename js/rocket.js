@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { RocketParticles } from './rocketParticles.js';
 
 export class Rocket {
-    constructor(scene) {
+    constructor(scene, soundManager) {
         this.scene = scene;
+        this.soundManager = soundManager;
         this.object = new THREE.Object3D();
         this.speed = 0;
         this.maxSpeed = 15; // Increased max speed
@@ -21,10 +22,6 @@ export class Rocket {
         // Add rocket to scene but make it invisible initially
         this.scene.add(this.object);
         this.object.visible = false;
-
-        // Sound effects (if needed)
-        this.launchSound = null;
-        this.flyingSound = null;
 
         // Explosion particles
         this.explosionParticles = [];
@@ -127,12 +124,6 @@ export class Rocket {
 
         // Add slight randomization to the speed as well
         this.speed *= (0.9 + Math.random() * 0.2); // Speed varies by ±10%
-
-        // Play launch sound if available
-        if (this.launchSound) {
-            this.launchSound.play();
-        }
-
     }
 
     explode() {
@@ -573,20 +564,19 @@ export class Rocket {
     reset() {
         this.active = false;
         this.object.visible = false;
-        this.speed = 0;
-        this.distanceTraveled = 0;
         this.exploded = false;
-
-        // Stop sounds if playing
-        if (this.flyingSound && this.flyingSound.isPlaying) {
-            this.flyingSound.stop();
-        }
+        this.explosionComplete = false;
+        this.distanceTraveled = 0;
+        this.speed = 0;
     }
 
     dispose() {
-        // Remove rocket from scene
+        // Clean up resources
+        this.reset();
+        
+        // Remove from scene
         this.scene.remove(this.object);
-
+        
         // Dispose of geometries and materials
         if (this.body) {
             this.body.geometry.dispose();
@@ -597,7 +587,12 @@ export class Rocket {
             this.nose.geometry.dispose();
             this.nose.material.dispose();
         }
-
+        
+        // Dispose of particles
+        if (this.particles) {
+            this.particles.dispose();
+        }
+        
         // Remove all explosion particles
         for (const particle of this.explosionParticles) {
             if (particle.system) {
