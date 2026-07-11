@@ -5,6 +5,7 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 // Additional check for low-end mobile devices
 const isLowEndMobile = isMobile && (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+const isIntegratedLaptop = !isMobile && ((navigator.hardwareConcurrency || 4) <= 8 || (navigator.deviceMemory || 4) <= 8 || window.devicePixelRatio > 1.5);
 
 export class SkyDome {
     constructor(scene) {
@@ -13,7 +14,7 @@ export class SkyDome {
         this.sun = new THREE.Vector3(0, 1, 0); // Default sun position
         
         // Load HDR environment based on device capability
-        if (isMobile) {
+        if (isMobile || isIntegratedLaptop) {
             this.loadLowQualitySky();
         } else {
             this.loadHDREnvironment();
@@ -57,7 +58,7 @@ export class SkyDome {
     }
     
     loadLowQualitySky() {
-        console.log("Loading lightweight HDR sky for mobile device");
+        console.log("Loading lightweight HDR sky for this device");
         
         // Use the lightweight sky_phone.exr for mobile devices
         const exrLoader = new EXRLoader();
@@ -67,7 +68,7 @@ export class SkyDome {
             texture.needsUpdate = true;
             
             // Apply mobile optimizations to the texture
-            if (isLowEndMobile) {
+            if (isLowEndMobile || isIntegratedLaptop) {
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
                 texture.generateMipmaps = false;
@@ -85,7 +86,7 @@ export class SkyDome {
             this.scene.background = texture;
             
             // Apply to materials with appropriate intensity based on device capability
-            const envMapIntensity = isLowEndMobile ? 0.5 : 0.8;
+            const envMapIntensity = (isLowEndMobile || isIntegratedLaptop) ? 0.5 : 0.8;
             this.applyMinimalEnvMap(texture, envMapIntensity);
         });
     }

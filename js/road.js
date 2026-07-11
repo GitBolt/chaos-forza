@@ -23,6 +23,7 @@ export class Road {
         // Rough terrain properties
         this.terrainBumps = [];
         this.terrainBumpMeshes = [];
+        this.showBumpDebug = true;
         
         // Create materials
         this.createMaterials();
@@ -229,8 +230,9 @@ export class Road {
         this.scene.add(road);
         segment.meshes.push(road);
         
-        // Add debug visualization for bumps
-        this.addBumpVisualization(segment, zPosition);
+        if (this.showBumpDebug) {
+            this.addBumpVisualization(segment, zPosition);
+        }
         
         // Add road markings - center line
         const markingGeometry = new THREE.PlaneGeometry(0.5, this.roadLength);
@@ -247,25 +249,33 @@ export class Road {
         const dashesPerSide = Math.floor(this.roadLength / (dashLength + dashGap));
         const dashOffset = (this.roadLength - (dashesPerSide * (dashLength + dashGap) - dashGap)) / 2;
         
+        // All dashes use identical geometry/material, so render them in one draw
+        // call. Their transforms remain local to the segment when it is recycled.
+        const dashGeometry = new THREE.PlaneGeometry(0.3, dashLength);
+        const dashInstances = new THREE.InstancedMesh(
+            dashGeometry,
+            this.markingMaterial,
+            dashesPerSide * 2
+        );
+        const dashTransform = new THREE.Object3D();
+        dashTransform.rotation.x = -Math.PI / 2;
+
         for (let i = 0; i < dashesPerSide; i++) {
-            const dashZ = zPosition - dashOffset - i * (dashLength + dashGap) - dashLength / 2;
-            
-            // Left dash
-            const leftDashGeometry = new THREE.PlaneGeometry(0.3, dashLength);
-            const leftDash = new THREE.Mesh(leftDashGeometry, this.markingMaterial);
-            leftDash.rotation.x = -Math.PI / 2;
-            leftDash.position.set(-this.roadWidth / 4, 0.01, dashZ);
-            this.scene.add(leftDash);
-            segment.meshes.push(leftDash);
-            
-            // Right dash
-            const rightDashGeometry = new THREE.PlaneGeometry(0.3, dashLength);
-            const rightDash = new THREE.Mesh(rightDashGeometry, this.markingMaterial);
-            rightDash.rotation.x = -Math.PI / 2;
-            rightDash.position.set(this.roadWidth / 4, 0.01, dashZ);
-            this.scene.add(rightDash);
-            segment.meshes.push(rightDash);
+            const localDashZ = -dashOffset - i * (dashLength + dashGap) - dashLength / 2;
+
+            dashTransform.position.set(-this.roadWidth / 4, 0.01, localDashZ);
+            dashTransform.updateMatrix();
+            dashInstances.setMatrixAt(i * 2, dashTransform.matrix);
+
+            dashTransform.position.x = this.roadWidth / 4;
+            dashTransform.updateMatrix();
+            dashInstances.setMatrixAt(i * 2 + 1, dashTransform.matrix);
         }
+
+        dashInstances.position.z = zPosition;
+        dashInstances.instanceMatrix.needsUpdate = true;
+        this.scene.add(dashInstances);
+        segment.meshes.push(dashInstances);
         
         // Add road surfaces on sides
         const roadSurfaceGeometryLeft = new THREE.PlaneGeometry(50, this.roadLength, 1, 4);
@@ -386,8 +396,8 @@ export class Road {
         
         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
         wall.position.y = this.boundaryHeight / 2; // Position so bottom is at ground level
-        wall.castShadow = true;
-        wall.receiveShadow = true;
+        wall.castShadow = false;
+        wall.receiveShadow = false;
         this.scene.add(wall);
         
         // Store the wall for reference
@@ -412,7 +422,7 @@ export class Road {
         const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
         edge.rotation.x = Math.PI / 2;
         edge.position.y = this.boundaryHeight;
-        edge.castShadow = true;
+        edge.castShadow = false;
         this.scene.add(edge);
         
         // Store the edge for reference
@@ -449,8 +459,8 @@ export class Road {
         );
         
         this.pillarInstances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.pillarInstances.castShadow = true;
-        this.pillarInstances.receiveShadow = true;
+        this.pillarInstances.castShadow = false;
+        this.pillarInstances.receiveShadow = false;
         
         // Set up matrix for each instance
         const dummy = new THREE.Object3D();
@@ -474,14 +484,14 @@ export class Road {
     }
     
     createBoundaryLights(pillarCount, pillarDistance, pillarHeight) {
-        // Create lights on top of every 4th pillar to reduce light count
-        const lightCount = Math.floor(pillarCount / 4);
+        // Keep a few accent lights; many point lights are expensive on laptops.
+        const lightCount = Math.min(4, Math.floor(pillarCount / 8));
         
         // Create an array to store the lights
         this.boundaryLights = [];
         
         for (let i = 0; i < lightCount; i++) {
-            const pillarIndex = i * 4; // Every 4th pillar
+            const pillarIndex = i * 8;
             const angle = (pillarIndex / pillarCount) * Math.PI * 2;
             const x = Math.cos(angle) * pillarDistance;
             const z = Math.sin(angle) * pillarDistance;
@@ -504,14 +514,6 @@ export class Road {
     createBoundaryRoughTerrain() {
         // Number of rough spots to create
         const numSpots = 100; // Lots of spots across the boundary
-        
-        // Create debug material for the bumps
-        const bumpMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xff0000, 
-            transparent: true, 
-            opacity: 0.7,
-            wireframe: false
-        });
         
         // Clear any existing bumps
         this.terrainBumpMeshes.forEach(mesh => {
@@ -543,19 +545,37 @@ export class Road {
                 height: bumpHeight
             });
             
-            // Create a visual representation of the bump
-            const bumpGeometry = new THREE.SphereGeometry(bumpRadius, 16, 16);
-            const bumpMesh = new THREE.Mesh(bumpGeometry, bumpMaterial);
-            
-            // Position the bump
-            bumpMesh.position.set(x, bumpHeight * 0.5, z);
-            
-            // Scale the sphere to match the bump height
-            bumpMesh.scale.y = bumpHeight * 0.5;
-            
-            // Add to scene and track
-            this.scene.add(bumpMesh);
-            this.terrainBumpMeshes.push(bumpMesh);
+        }
+
+        if (this.showBumpDebug) {
+            const bumpMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.7
+            });
+            const bumpGeometry = new THREE.SphereGeometry(1, 8, 8);
+            const bumpInstances = new THREE.InstancedMesh(
+                bumpGeometry,
+                bumpMaterial,
+                this.terrainBumps.length
+            );
+            const bumpTransform = new THREE.Object3D();
+
+            for (let i = 0; i < this.terrainBumps.length; i++) {
+                const bump = this.terrainBumps[i];
+                bumpTransform.position.set(
+                    bump.position.x,
+                    bump.height * 0.5,
+                    bump.position.z
+                );
+                bumpTransform.scale.set(bump.radius, bump.height * 0.5, bump.radius);
+                bumpTransform.updateMatrix();
+                bumpInstances.setMatrixAt(i, bumpTransform.matrix);
+            }
+
+            bumpInstances.instanceMatrix.needsUpdate = true;
+            this.scene.add(bumpInstances);
+            this.terrainBumpMeshes.push(bumpInstances);
         }
     }
     
@@ -622,8 +642,9 @@ export class Road {
                     roadMesh.geometry.dispose(); // Clean up old geometry
                     roadMesh.geometry = newGeometry;
                     
-                    // Add new debug visualization
-                    this.addBumpVisualization(segment, newZ);
+                    if (this.showBumpDebug) {
+                        this.addBumpVisualization(segment, newZ);
+                    }
                 }
             }
         }
@@ -631,10 +652,6 @@ export class Road {
         // Update dynamic boundary based on car position
         this.updateDynamicBoundary(carPosition);
         
-        // Occasionally refresh boundary bumps for variety
-        if (Math.random() < 0.005) { // Small chance each frame
-            this.createBoundaryRoughTerrain();
-        }
     }
     
     updateDynamicBoundary(carPosition) {
@@ -676,26 +693,30 @@ export class Road {
             wireframe: false // Solid instead of wireframe
         });
         
-        // Add visualization for each bump
-        for (const bump of segment.bumpMap) {
-            // Create a sphere to represent the bump
-            const bumpGeometry = new THREE.SphereGeometry(bump.radius, 16, 16);
-            const bumpMesh = new THREE.Mesh(bumpGeometry, debugMaterial);
-            
-            // Position the sphere at the bump location
-            bumpMesh.position.set(
+        const bumpGeometry = new THREE.SphereGeometry(1, 12, 12);
+        const bumpInstances = new THREE.InstancedMesh(
+            bumpGeometry,
+            debugMaterial,
+            segment.bumpMap.length
+        );
+        const bumpTransform = new THREE.Object3D();
+
+        for (let i = 0; i < segment.bumpMap.length; i++) {
+            const bump = segment.bumpMap[i];
+            bumpTransform.position.set(
                 bump.position.x,
-                bump.height * 0.5, // Set height to match bump height
-                bump.position.y + zPosition // Adjust for segment position
+                bump.height * 0.5,
+                bump.position.y
             );
-            
-            // Scale the sphere to match the bump height
-            bumpMesh.scale.y = bump.height * 0.5;
-            
-            // Add to scene and track in segment
-            this.scene.add(bumpMesh);
-            segment.debugMeshes.push(bumpMesh);
+            bumpTransform.scale.set(bump.radius, bump.height * 0.5, bump.radius);
+            bumpTransform.updateMatrix();
+            bumpInstances.setMatrixAt(i, bumpTransform.matrix);
         }
+
+        bumpInstances.position.z = zPosition;
+        bumpInstances.instanceMatrix.needsUpdate = true;
+        this.scene.add(bumpInstances);
+        segment.debugMeshes.push(bumpInstances);
     }
     
     // Add a new method to create rough terrain
@@ -748,6 +769,7 @@ export class Road {
     
     // Add a method to check if the car is on a boundary bump
     getBoundaryBumpAtPosition(position) {
+        const carContactRadius = 1.5;
         // Check if the car is on any bump in the boundary
         for (const bump of this.terrainBumps) {
             const distance = Math.sqrt(
@@ -755,9 +777,9 @@ export class Road {
                 Math.pow(position.z - bump.position.z, 2)
             );
             
-            if (distance < bump.radius) {
+            if (distance < bump.radius + carContactRadius) {
                 // Calculate bump effect based on distance from center
-                const falloff = 1 - (distance / bump.radius);
+                const falloff = 1 - (distance / (bump.radius + carContactRadius));
                 const bumpEffect = bump.height * falloff * falloff;
                 
                 return {
@@ -803,15 +825,16 @@ export class Road {
         const localZ = position.z - segment.position.z;
         
         // Check if the car is on any bump in this segment
+        const carContactRadius = 1.5;
         for (const bump of segment.bumpMap) {
             const distance = Math.sqrt(
                 Math.pow(localX - bump.position.x, 2) + 
                 Math.pow(localZ - bump.position.y, 2)
             );
             
-            if (distance < bump.radius) {
+            if (distance < bump.radius + carContactRadius) {
                 // Calculate bump effect based on distance from center
-                const falloff = 1 - (distance / bump.radius);
+                const falloff = 1 - (distance / (bump.radius + carContactRadius));
                 const bumpEffect = bump.height * falloff * falloff;
                 
                 return {

@@ -3,6 +3,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Device detection for performance optimization
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIntegratedLaptop = !isMobile && ((navigator.hardwareConcurrency || 4) <= 8 || (navigator.deviceMemory || 4) <= 8 || window.devicePixelRatio > 1.5);
+const isSafari = /^((?!chrome|chromium|android).)*safari/i.test(navigator.userAgent);
+const enemyModelPath = isSafari ? 'mclaren-lod.glb' : 'mclaren.glb';
+let sharedEnemyModelPromise = null;
+let sharedEnemyModel = null;
 
 export class EnemyVehicle {
     constructor(scene, position, road) {
@@ -20,18 +25,24 @@ export class EnemyVehicle {
         this.object.rotation.y = Math.random() * Math.PI * 2;
         
         // Physics properties
-        this.speed = 0.5 + Math.random() * 1.5; // Random speed between 0.5 and 2
+        this.speed = 11 + Math.random() * 6;
         this.direction = new THREE.Vector3(0, 0, -1); // Forward direction
-        this.turnSpeed = 0.02 + Math.random() * 0.03; // Random turn speed
+        this.turnSpeed = 1.1 + Math.random() * 0.7;
+        this.targetHeading = this.object.rotation.y;
+        this.aggression = 0.35 + Math.random() * 0.6;
+        this.preferredDistance = 20 + Math.random() * 35;
+        this.orbitDirection = Math.random() < 0.5 ? -1 : 1;
         
         // Movement pattern
         this.movementPattern = Math.floor(Math.random() * 3); // 0: straight, 1: circular, 2: random
         this.directionChangeTimer = 0;
-        this.directionChangeDuration = 2 + Math.random() * 3; // Change direction every 2-5 seconds
+        this.directionChangeDuration = 1.2 + Math.random() * 2;
         
         // Boundary check
         this.boundaryRadius = road.boundaryRadius - 10; // Stay within road boundary with buffer
         this.lastValidPosition = new THREE.Vector3();
+        this.movement = new THREE.Vector3();
+        this.toPlayer = new THREE.Vector3();
         
         // Collision properties - increased for better gameplay
         this.collisionRadius = 3.5; // Increased radius for collision detection
@@ -48,40 +59,32 @@ export class EnemyVehicle {
     }
     
     loadModel() {
-        const loader = new GLTFLoader();
-        
-        loader.load('mclaren.glb', (gltf) => {
-            this.model = gltf.scene;
-            
-            // Scale and position the model - reduce size to 0.2 of original (was 0.25)
-            // Further reduce size on mobile for better performance
-            const scale = isMobile ? 1:1
+        if (!sharedEnemyModelPromise) {
+            const loader = new GLTFLoader();
+            sharedEnemyModelPromise = new Promise((resolve, reject) => {
+                loader.load(enemyModelPath, (gltf) => {
+                    sharedEnemyModel = gltf.scene;
+                    this.prepareSharedModel(sharedEnemyModel);
+                    resolve(sharedEnemyModel);
+                }, undefined, reject);
+            });
+        }
+
+        sharedEnemyModelPromise.then((sourceModel) => {
+            if (this.destroyed) return;
+
+            this.model = sourceModel.clone(true);
+            const scale = 1;
             this.model.scale.set(scale, scale, scale);
             this.model.rotation.y = Math.PI;
-            // Apply materials
-            this.applyMaterials();
-            
-            // Enable shadows only on higher-end devices
-            if (!isMobile) {
-                this.model.traverse((child) => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                    }
-                });
-            }
-            
-            // Add model to object
             this.object.add(this.model);
-            
-            // Store initial position as last valid position
             this.lastValidPosition.copy(this.object.position);
-        });
+        }).catch((error) => console.error('Error loading enemy vehicle model:', error));
     }
     
-    applyMaterials() {
+    prepareSharedModel(model) {
         // Use a simpler material for better performance with many vehicles
-        this.model.traverse((child) => {
+        model.traverse((child) => {
             if (child.isMesh) {
                 // Create a copy of the original material to preserve textures
                 const originalMaterial = child.material;
@@ -105,6 +108,9 @@ export class EnemyVehicle {
                     });
                     child.material = material;
                 }
+
+                child.castShadow = !isMobile && !isIntegratedLaptop;
+                child.receiveShadow = !isMobile && !isIntegratedLaptop;
             }
         });
     }
@@ -127,8 +133,7 @@ export class EnemyVehicle {
             this.changeDirection(playerPosition);
         }
         
-        // Update movement - simplified
-        this.updateSimpleMovement(delta);
+        this.updateMovement(delta, playerPosition);
         
         // Check boundary
         if (!this.isWithinBoundary(this.object.position)) {
@@ -138,38 +143,53 @@ export class EnemyVehicle {
         }
     }
     
-    updateSimpleMovement(delta) {
+    updateMovement(delta, playerPosition) {
+        const radiusSquared = this.object.position.x * this.object.position.x +
+            this.object.position.z * this.object.position.z;
+        const boundarySteeringRadius = this.boundaryRadius * 0.86;
+
+        if (radiusSquared > boundarySteeringRadius * boundarySteeringRadius) {
+            // Begin turning toward the arena center before reaching the wall.
+            this.targetHeading = Math.atan2(this.object.position.x, this.object.position.z);
+        } else if (playerPosition) {
+            this.toPlayer.subVectors(playerPosition, this.object.position);
+            const distanceToPlayer = this.toPlayer.length();
+
+            if (distanceToPlayer < 500 && this.aggression > 0.42) {
+                const pursuitHeading = Math.atan2(-this.toPlayer.x, -this.toPlayer.z);
+                // Circle instead of piling directly on top of the player.
+                const orbitAmount = distanceToPlayer < this.preferredDistance
+                    ? this.orbitDirection * Math.PI * 0.42
+                    : 0;
+                this.targetHeading = pursuitHeading + orbitAmount;
+            }
+        }
+
+        const headingDelta = Math.atan2(
+            Math.sin(this.targetHeading - this.object.rotation.y),
+            Math.cos(this.targetHeading - this.object.rotation.y)
+        );
+        const maximumTurn = this.turnSpeed * delta;
+        this.object.rotation.y += THREE.MathUtils.clamp(headingDelta, -maximumTurn, maximumTurn);
+
         // Update direction vector based on rotation
         this.direction.set(0, 0, -1).applyQuaternion(this.object.quaternion);
         
-        // Move forward - simplified movement with no physics
-        const movement = this.direction.clone().multiplyScalar(this.speed * delta * 30);
-        this.object.position.add(movement);
-        
-        // Apply very simple movement pattern
-        if (this.movementPattern === 1) { // Circular
-            // Gradually turn in one direction
-            this.object.rotation.y += this.turnSpeed * delta * 30;
-        }
+        this.movement.copy(this.direction).multiplyScalar(this.speed * delta);
+        this.object.position.add(this.movement);
     }
     
     changeDirection(playerPosition) {
-        // Randomly change movement pattern
-        this.movementPattern = Math.floor(Math.random() * 3);
-        
-        // Sometimes target the player
-        if (Math.random() < 0.3 && playerPosition) {
-            // Calculate direction to player
-            const toPlayer = new THREE.Vector3().subVectors(playerPosition, this.object.position);
-            // Set rotation to face player with some randomness
-            this.object.rotation.y = Math.atan2(toPlayer.x, toPlayer.z) + (Math.random() - 0.5) * 0.5;
+        if (playerPosition && Math.random() < this.aggression) {
+            this.toPlayer.subVectors(playerPosition, this.object.position);
+            this.targetHeading = Math.atan2(-this.toPlayer.x, -this.toPlayer.z) +
+                (Math.random() - 0.5) * 0.35;
         } else {
-            // Random new direction
-            this.object.rotation.y = Math.random() * Math.PI * 2;
+            this.targetHeading += (Math.random() - 0.5) * Math.PI * 0.9;
         }
-        
-        // Randomize speed
-        this.speed = 0.5 + Math.random() * 1.5;
+
+        this.speed = 11 + Math.random() * 7;
+        this.directionChangeDuration = 1.2 + Math.random() * 2;
     }
     
     isWithinBoundary(position) {
@@ -182,10 +202,8 @@ export class EnemyVehicle {
         if (this.destroyed) return false;
         
         // Calculate distance between rocket and enemy vehicle
-        const distance = this.object.position.distanceTo(rocketPosition);
-        
-        // Check if within explosion radius
-        return distance < (this.collisionRadius + explosionRadius);
+        const collisionDistance = this.collisionRadius + explosionRadius;
+        return this.object.position.distanceToSquared(rocketPosition) < collisionDistance * collisionDistance;
     }
     
     destroy(explosionPosition) {
@@ -311,12 +329,8 @@ export class EnemyVehicle {
         
         // Dispose of model
         if (this.model) {
-            this.model.traverse((child) => {
-                if (child.isMesh) {
-                    child.geometry.dispose();
-                    child.material.dispose();
-                }
-            });
+            this.object.remove(this.model);
+            this.model = null;
         }
     }
-} 
+}

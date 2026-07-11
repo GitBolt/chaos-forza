@@ -1,18 +1,27 @@
 import * as THREE from 'three';
 import { RocketParticles } from './rocketParticles.js';
 
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIntegratedLaptop = !isMobile && ((navigator.hardwareConcurrency || 4) <= 8 || (navigator.deviceMemory || 4) <= 8 || window.devicePixelRatio > 1.5);
+const useDynamicRocketLights = !isMobile && !isIntegratedLaptop;
+
 export class Rocket {
     constructor(scene) {
         this.scene = scene;
         this.object = new THREE.Object3D();
         this.speed = 0;
-        this.maxSpeed = 15; // Increased max speed
-        this.acceleration = 3; // Increased acceleration
+        this.maxSpeed = 65;
+        this.acceleration = 50;
         this.active = false;
         this.distanceTraveled = 0; // Track distance traveled
-        this.explosionRange = 25; // Distance after which rocket will explode
+        this.explosionRange = 220;
         this.exploded = false;
         this.explosionComplete = false; // Track when explosion animation is complete
+        this.exhaustPosition = new THREE.Vector3();
+        this.exhaustDirection = new THREE.Vector3();
+        this.launchOffset = new THREE.Vector3();
+        this.targetPosition = new THREE.Vector3();
+        this.moveDirection = new THREE.Vector3();
 
         // Create rocket body
         this.createRocketBody();
@@ -73,14 +82,15 @@ export class Rocket {
             this.object.add(fin);
         }
 
-        // Add exhaust point light
-        this.exhaustLight = new THREE.PointLight(0xff6600, 2, 5);
-        this.exhaustLight.position.set(0, 0, 1.2); // Behind the rocket
-        this.object.add(this.exhaustLight);
+        if (useDynamicRocketLights) {
+            this.exhaustLight = new THREE.PointLight(0xff6600, 2, 5);
+            this.exhaustLight.position.set(0, 0, 1.2); // Behind the rocket
+            this.object.add(this.exhaustLight);
+        }
 
         // Enable shadows
-        this.body.castShadow = true;
-        this.nose.castShadow = true;
+        this.body.castShadow = useDynamicRocketLights;
+        this.nose.castShadow = useDynamicRocketLights;
     }
 
     launch(position, direction, carSpeed = 0, isCarInAir = false) {
@@ -90,15 +100,16 @@ export class Rocket {
         this.explosionComplete = false;
 
         // Set rocket position slightly in front of the car
-        const offset = direction.clone().multiplyScalar(3); // 3 units in front of car
-        this.object.position.copy(position).add(offset);
+        this.launchOffset.copy(direction).multiplyScalar(3);
+        this.object.position.copy(position).add(this.launchOffset);
         
         // Add a small upward offset to position the rocket slightly above the car
         this.object.position.y += 0.5; // Small upward offset for better visibility
         
         // Add slight randomization to the direction for more interesting trajectories
         const randomFactor = 0.1; // Adjust this value to control the amount of randomization
-        const randomizedDirection = direction.clone();
+        this.moveDirection.copy(direction);
+        const randomizedDirection = this.moveDirection;
         randomizedDirection.x += (Math.random() - 0.5) * randomFactor;
         
         // If car is in air, angle the missile slightly downward to hit ground targets
@@ -112,19 +123,17 @@ export class Rocket {
         randomizedDirection.normalize(); // Ensure it's still a unit vector
 
         // Set rocket orientation to match the randomized direction
-        const targetPos = new THREE.Vector3().copy(this.object.position).add(randomizedDirection);
-        this.object.lookAt(targetPos);
+        this.targetPosition.copy(this.object.position).add(randomizedDirection);
+        this.object.lookAt(this.targetPosition);
 
         // Activate rocket
         this.active = true;
         this.object.visible = true;
 
         // Store the direction for movement
-        this.moveDirection = randomizedDirection;
-
         // Set initial speed based on car's speed plus base rocket speed
         // This ensures the rocket always moves faster than the car
-        this.speed = 0.8 + carSpeed; // Base speed + car speed
+        this.speed = Math.min(38 + Math.max(carSpeed, 0) * 0.45, this.maxSpeed);
 
         // Add slight randomization to the speed as well
         this.speed *= (0.9 + Math.random() * 0.2); // Speed varies by ±10%
@@ -190,15 +199,17 @@ export class Rocket {
     }
     
     createEnhancedFlash(position) {
-        // Create a bright central flash light
-        const flashLight = new THREE.PointLight(0xffaa00, 15, 25);
-        flashLight.position.copy(position);
-        this.scene.add(flashLight);
-        
-        // Create a secondary, wider flash light
-        const wideFlashLight = new THREE.PointLight(0xff5500, 8, 40);
-        wideFlashLight.position.copy(position);
-        this.scene.add(wideFlashLight);
+        let flashLight = null;
+        let wideFlashLight = null;
+        if (useDynamicRocketLights) {
+            flashLight = new THREE.PointLight(0xffaa00, 15, 25);
+            flashLight.position.copy(position);
+            this.scene.add(flashLight);
+
+            wideFlashLight = new THREE.PointLight(0xff5500, 8, 40);
+            wideFlashLight.position.copy(position);
+            this.scene.add(wideFlashLight);
+        }
         
         // Create a visual flash sphere (bright glowing ball)
         const flashGeometry = new THREE.SphereGeometry(3, 8, 8);
@@ -229,16 +240,20 @@ export class Rocket {
             // Reduce light intensity
             intensity1 *= 0.85;
             intensity2 *= 0.85;
-            flashLight.intensity = intensity1;
-            wideFlashLight.intensity = intensity2;
+            if (flashLight && wideFlashLight) {
+                flashLight.intensity = intensity1;
+                wideFlashLight.intensity = intensity2;
+            }
             
             if (flashMaterial.opacity > 0.05) {
                 requestAnimationFrame(animateFlash);
             } else {
                 // Clean up
                 this.scene.remove(flashSphere);
-                this.scene.remove(flashLight);
-                this.scene.remove(wideFlashLight);
+                if (flashLight && wideFlashLight) {
+                    this.scene.remove(flashLight);
+                    this.scene.remove(wideFlashLight);
+                }
                 flashGeometry.dispose();
                 flashMaterial.dispose();
             }
@@ -249,7 +264,7 @@ export class Rocket {
     
     addSimpleParticles(position) {
         // Create just a few simple particles
-        const particleCount = 15; // Small number for performance
+        const particleCount = isMobile ? 6 : (isIntegratedLaptop ? 10 : 15);
         
         for (let i = 0; i < particleCount; i++) {
             // Create a simple sphere for each particle
@@ -314,7 +329,7 @@ export class Rocket {
     
     addSimpleSmoke(position) {
         // Create just a few simple smoke puffs
-        const smokeCount = 8; // Small number for performance
+        const smokeCount = isMobile ? 3 : (isIntegratedLaptop ? 5 : 8);
         
         for (let i = 0; i < smokeCount; i++) {
             // Create a simple plane for each smoke puff
@@ -407,25 +422,25 @@ export class Rocket {
         this.distanceTraveled += moveDistance;
 
         // Move the rocket forward in the stored direction
-        this.object.position.x += this.moveDirection.x * this.speed;
-        this.object.position.y += this.moveDirection.y * this.speed; // Allow Y movement for angled shots
-        this.object.position.z += this.moveDirection.z * this.speed;
+        this.object.position.x += this.moveDirection.x * moveDistance;
+        this.object.position.y += this.moveDirection.y * moveDistance;
+        this.object.position.z += this.moveDirection.z * moveDistance;
 
         // Flicker the exhaust light for effect
-        this.exhaustLight.intensity = 2 + Math.random() * 1;
+        if (this.exhaustLight) {
+            this.exhaustLight.intensity = 2 + Math.random();
+        }
 
         // Calculate exhaust position - simplified approach
         // Create a position slightly behind the rocket in the opposite direction of travel
-        const exhaustPosition = new THREE.Vector3(
-            this.object.position.x - this.moveDirection.x * 1.2,
-            this.object.position.y - this.moveDirection.y * 1.2,
-            this.object.position.z - this.moveDirection.z * 1.2
-        );
+        this.exhaustPosition.copy(this.moveDirection)
+            .multiplyScalar(-1.2)
+            .add(this.object.position);
 
         // Emit particles from the exhaust
         this.particles.emitParticles(
-            exhaustPosition,
-            this.moveDirection.clone().negate(), // Particles go opposite direction
+            this.exhaustPosition,
+            this.exhaustDirection.copy(this.moveDirection).negate(),
             Math.floor(5 + this.speed * 3) // More particles at higher speeds
         );
 
@@ -477,4 +492,4 @@ export class Rocket {
             this.explosionComplete = true;
         }, 100);
     }
-} 
+}

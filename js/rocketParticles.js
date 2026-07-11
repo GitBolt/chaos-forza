@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIntegratedLaptop = !isMobile && ((navigator.hardwareConcurrency || 4) <= 8 || (navigator.deviceMemory || 4) <= 8 || window.devicePixelRatio > 1.5);
+
 export class RocketParticles {
     constructor(scene) {
         this.scene = scene;
         this.particles = [];
-        this.particleCount = 300; // Significantly increased particle count for better effect
+        this.particleCount = isMobile ? 90 : (isIntegratedLaptop ? 140 : 220);
         this.particleGeometry = new THREE.BufferGeometry();
         
         // Create a custom texture for better-looking particles
@@ -234,4 +237,4 @@ export class RocketParticles {
             this.particleMaterial.map.dispose();
         }
     }
-} 
+}
